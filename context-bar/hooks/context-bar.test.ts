@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 
 import type { ContextBarSnapshot } from '../types'
-import { barSegments, formatShare, formatTokens, legendItems, legendLines } from './layout'
+import { barSegments, categoryColors, formatShare, formatTokens, legendItems, legendLines } from './layout'
 
 const SNAP: ContextBarSnapshot = {
   used: 212_000,
@@ -20,6 +20,8 @@ test('counts print the way /context prints them', () => {
   expect(formatTokens(1_000_000)).toBe('1M')
   expect(formatShare(3_400, 1_000_000)).toBe('0.3%')
   expect(formatShare(186_000, 1_000_000)).toBe('19%')
+  expect(formatShare(9_970, 1_000_000)).toBe('1%')
+  expect(formatShare(9_400, 1_000_000)).toBe('0.9%')
 })
 
 test('the bar fills its width, gives every category a cell and marks compaction', () => {
@@ -31,6 +33,16 @@ test('the bar fills its width, gives every category a cell and marks compaction'
   const marker = segments.findIndex(s => s.isMarker)
   const before = segments.slice(0, marker).reduce((n, s) => n + s.text.length, 0)
   expect(before).toBe(95)
+})
+
+test('every category gets its own colour, unknown ones from the spare list', () => {
+  const colors = categoryColors(['system prompt', 'system tools', 'something new', 'another new'])
+  expect(new Set(colors).size).toBe(4)
+})
+
+test('free space is drawn shaded, not as a solid category', () => {
+  const free = barSegments(SNAP, 100).filter(s => s.color === null && !s.isMarker)
+  expect(free.every(s => /^░+$/.test(s.text))).toBe(true)
 })
 
 test('legend ends with free space and wraps to the width', () => {

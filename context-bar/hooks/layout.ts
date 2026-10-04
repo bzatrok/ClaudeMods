@@ -6,13 +6,41 @@ import type { ContextBarRow, ContextBarSnapshot } from '../types'
 export type BarSegment = { color: string | null; text: string; isMarker: boolean }
 
 const FILLED = '█'
-const FREE = '█'
+export const FREE = '░'
 const MARKER = '▏'
 
+/**
+ * Our own palette rather than /context's theme colours: several of those are greys
+ * (system prompt, system tools) that read as one block beside each other.
+ * Known categories keep a fixed colour; any other takes the next unused one.
+ */
+const CATEGORY_COLORS: Record<string, string> = {
+  'system prompt': '#7aa2f7',
+  'system tools': '#2ac3de',
+  'mcp tools': '#bb9af7',
+  'mcp server instructions': '#9d7cd8',
+  'custom agents': '#9ece6a',
+  'memory files': '#e0af68',
+  skills: '#f7768e',
+  messages: '#ff9e64',
+}
+const SPARE_COLORS = ['#73daca', '#b4f9f8', '#c0caf5', '#db4b4b', '#41a6b5', '#ff007c']
+
+export function categoryColors(names: string[]): string[] {
+  const taken = new Set(names.map(n => CATEGORY_COLORS[n]).filter(Boolean))
+  const spare = SPARE_COLORS.filter(c => !taken.has(c))
+  return names.map(n => CATEGORY_COLORS[n] ?? spare.shift() ?? '#c0caf5')
+}
+
 export function toSnapshot(breakdown: SessionContextBreakdown): ContextBarSnapshot {
-  const rows: ContextBarRow[] = breakdown.categories
-    .filter(c => c.kind === 'used' && c.tokens > 0)
-    .map(c => ({ name: c.name.toLowerCase(), tokens: c.tokens, color: c.color }))
+  const used = breakdown.categories.filter(c => c.kind === 'used' && c.tokens > 0)
+  const names = used.map(c => c.name.toLowerCase())
+  const colors = categoryColors(names)
+  const rows: ContextBarRow[] = used.map((c, i) => ({
+    name: names[i] ?? c.name,
+    tokens: c.tokens,
+    color: colors[i] ?? c.color,
+  }))
 
   return {
     used: breakdown.totalTokens,
@@ -34,7 +62,8 @@ export function formatTokens(n: number): string {
 export function formatShare(tokens: number, max: number): string {
   if (max <= 0) return '0%'
   const pct = (tokens / max) * 100
-  return pct < 1 ? `${pct.toFixed(1)}%` : `${Math.round(pct)}%`
+  // 0.97% rounds to "1.0%" with one decimal; from 0.95% up it reads as a whole percent.
+  return pct < 0.95 ? `${pct.toFixed(1)}%` : `${Math.round(pct)}%`
 }
 
 export function percentColor(percent: number): string {

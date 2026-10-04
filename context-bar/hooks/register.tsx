@@ -9,6 +9,7 @@ import {
   legendLines,
   percentColor,
   toSnapshot,
+  FREE,
 } from './layout'
 
 const COMMAND = 'context-bar'
@@ -97,9 +98,7 @@ export const register: Register = on => {
             seg.isMarker ? (
               <Text color="yellow">{seg.text}</Text>
             ) : seg.color === null ? (
-              <Text color="gray" dimColor>
-                {seg.text}
-              </Text>
+              <Text dimColor>{seg.text}</Text>
             ) : (
               <Text color={seg.color}>{seg.text}</Text>
             ),
@@ -110,9 +109,7 @@ export const register: Register = on => {
             {line.map(item => (
               <Text>
                 {item.color === null ? (
-                  <Text color="gray" dimColor>
-                    ▌{' '}
-                  </Text>
+                  <Text dimColor>{FREE} </Text>
                 ) : (
                   <Text color={item.color}>▌ </Text>
                 )}

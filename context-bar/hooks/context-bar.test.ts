@@ -1,0 +1,95 @@
+import { expect, mock, test } from 'claude-code/testing'
+
+import type { ContextBarSnapshot } from '../types'
+import { barSegments, formatShare, formatTokens, legendItems, legendLines } from './layout'
+
+const SNAP: ContextBarSnapshot = {
+  used: 212_000,
+  max: 1_000_000,
+  compactAt: 950_000,
+  rows: [
+    { name: 'system prompt', tokens: 3_400, color: 'promptBorder' },
+    { name: 'messages', tokens: 186_000, color: 'permission' },
+  ],
+}
+
+test('counts print the way /context prints them', () => {
+  expect(formatTokens(512)).toBe('512')
+  expect(formatTokens(3_400)).toBe('3.4k')
+  expect(formatTokens(212_000)).toBe('212k')
+  expect(formatTokens(1_000_000)).toBe('1M')
+  expect(formatShare(3_400, 1_000_000)).toBe('0.3%')
+  expect(formatShare(186_000, 1_000_000)).toBe('19%')
+})
+
+test('the bar fills its width, gives every category a cell and marks compaction', () => {
+  const segments = barSegments(SNAP, 100)
+  const total = segments.reduce((n, s) => n + s.text.length, 0)
+  expect(total).toBe(100)
+  expect(segments[0]).toEqual({ color: 'promptBorder', text: '█', isMarker: false })
+  expect(segments[1]?.text.length).toBe(19)
+  const marker = segments.findIndex(s => s.isMarker)
+  const before = segments.slice(0, marker).reduce((n, s) => n + s.text.length, 0)
+  expect(before).toBe(95)
+})
+
+test('legend ends with free space and wraps to the width', () => {
+  const items = legendItems(SNAP)
+  expect(items[items.length - 1]).toEqual({ color: null, name: 'free', tokens: '788k', share: '' })
+  expect(legendLines(items, 30).length).toBeGreaterThan(1)
+  expect(legendLines(items, 200).length).toBe(1)
+})
+
+test('/context-bar toggles the band on and off on every surface', async ($, on) => {
+  mock.store(on)
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('session.usage', () => ({ value: {
+    startedAt: 0,
+    rateLimits: [],
+    context: {
+      window: 1_000_000,
+      breakdown: {
+        categories: [
+          { name: 'System prompt', tokens: 3_400, color: 'promptBorder', isDeferred: false, kind: 'used' },
+          { name: 'Messages', tokens: 186_000, color: 'permission', isDeferred: false, kind: 'used' },
+          { name: 'Free space', tokens: 788_000, color: 'inactive', isDeferred: false, kind: 'free' },
+        ],
+        totalTokens: 212_000,
+        maxTokens: 1_000_000,
+        rawMaxTokens: 1_000_000,
+        autocompactSource: 'auto',
+        percentage: 21,
+        gridRows: [],
+        model: 'test',
+        memoryFiles: [],
+        mcpTools: [],
+        agents: [],
+        autoCompactThreshold: 950_000,
+        isAutoCompactEnabled: true,
+        apiUsage: null,
+      },
+    },
+  } }))
+
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+
+  const on1 = await $.command.run({ command: 'context-bar', args: '' } as never)
+  expect(on1.text).toBe('Context bar on.')
+
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({
+      plugin: 'context-bar',
+      surface,
+      component: 'AbovePrompt',
+      props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 80 } as never,
+    })
+    expect(await ui.find({ type: 'Text', text: /212k/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /compacts at 950k/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /free 788k/ })).toBeDefined()
+    await ui.unmount()
+  }
+
+  const off = await $.command.run({ command: 'context-bar', args: '' } as never)
+  expect(off.text).toBe('Context bar off.')
+})

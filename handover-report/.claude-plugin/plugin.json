@@ -1,0 +1,6 @@
+{
+  "name": "handover-report",
+  "version": "0.1.0",
+  "description": "/handover-report: a pane with the state of .handovers/handover_log.md — open handovers, their branches, open questions, stale worktrees",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,4 @@
+# Engine-generated typings, rewritten on every load
+*/.claude-plugin/types/
+.DS_Store
+node_modules/

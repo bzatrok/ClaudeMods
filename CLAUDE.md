@@ -5,7 +5,7 @@ Personal mods (plugins of function hooks), one folder per mod. Loaded in every s
 
 | Mod | What it does |
 |---|---|
-| `context-bar/` | `/context-bar` toggles a stacked context-window bar above the prompt |
+| `context-bar/` | `/context-bar` toggles a stacked context-window bar above the prompt; per session, starts hidden |
 | `handover-report/` | `/handover-report` opens a pane with the state of `.handovers/handover_log.md` |
 
 ## Commands (per mod folder)

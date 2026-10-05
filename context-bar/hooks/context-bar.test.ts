@@ -53,7 +53,6 @@ test('legend ends with free space and wraps to the width', () => {
 })
 
 test('/context-bar toggles the band on and off on every surface', async ($, on) => {
-  mock.store(on)
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.usage', () => ({ value: {
     startedAt: 0,

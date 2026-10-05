@@ -13,8 +13,8 @@ import {
 } from './layout'
 
 const COMMAND = 'context-bar'
-const STORE_KEY = 'isVisible'
 
+/** Per session on purpose: every session starts hidden, `/context-bar` shows it for that session only. */
 const isVisible = atom({ plugin: 'context-bar', key: 'isVisible' } as const, false)
 const snapshot = atom({ plugin: 'context-bar', key: 'snapshot' } as const, null as ContextBarSnapshot | null)
 
@@ -32,9 +32,6 @@ export const register: Register = on => {
       name: COMMAND,
       description: 'Toggle the context window bar above the prompt',
     })
-    const stored = (await $.store.get(STORE_KEY)) === true
-    await update($, isVisible, () => stored)
-    if (stored) await refresh($)
 
     return next(e)
   })
@@ -42,7 +39,6 @@ export const register: Register = on => {
   on('command.run', { command: COMMAND }, async $ => {
     const shown = !(await read($, isVisible))
     await update($, isVisible, () => shown)
-    await $.store.set(STORE_KEY, shown)
     if (shown) await refresh($)
 
     return { text: shown ? 'Context bar on.' : 'Context bar off.' }

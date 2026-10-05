@@ -55,35 +55,38 @@ test('legend ends with free space and wraps to the width', () => {
   expect(legendLines(items, 200).length).toBe(1)
 })
 
+/** A session.usage answer whose context holds `used` tokens. */
+const usageWith = (used: number) => ({
+  startedAt: 0,
+  rateLimits: [],
+  context: {
+    window: 1_000_000,
+    breakdown: {
+      categories: [
+        { name: 'System prompt', tokens: 3_400, color: 'promptBorder', isDeferred: false, kind: 'used' },
+        { name: 'Messages', tokens: 186_000, color: 'permission', isDeferred: false, kind: 'used' },
+        { name: 'Free space', tokens: 788_000, color: 'inactive', isDeferred: false, kind: 'free' },
+      ],
+      totalTokens: used,
+      maxTokens: 1_000_000,
+      rawMaxTokens: 1_000_000,
+      autocompactSource: 'auto',
+      percentage: 21,
+      gridRows: [],
+      model: 'test',
+      memoryFiles: [],
+      mcpTools: [],
+      agents: [],
+      autoCompactThreshold: 950_000,
+      isAutoCompactEnabled: true,
+      apiUsage: null,
+    },
+  },
+})
+
 test('/context-bar toggles the band on and off on every surface', async ($, on) => {
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('session.usage', () => ({ value: {
-    startedAt: 0,
-    rateLimits: [],
-    context: {
-      window: 1_000_000,
-      breakdown: {
-        categories: [
-          { name: 'System prompt', tokens: 3_400, color: 'promptBorder', isDeferred: false, kind: 'used' },
-          { name: 'Messages', tokens: 186_000, color: 'permission', isDeferred: false, kind: 'used' },
-          { name: 'Free space', tokens: 788_000, color: 'inactive', isDeferred: false, kind: 'free' },
-        ],
-        totalTokens: 212_000,
-        maxTokens: 1_000_000,
-        rawMaxTokens: 1_000_000,
-        autocompactSource: 'auto',
-        percentage: 21,
-        gridRows: [],
-        model: 'test',
-        memoryFiles: [],
-        mcpTools: [],
-        agents: [],
-        autoCompactThreshold: 950_000,
-        isAutoCompactEnabled: true,
-        apiUsage: null,
-      },
-    },
-  } }))
+  on('session.usage', () => ({ value: usageWith(212_000) }))
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
@@ -106,4 +109,26 @@ test('/context-bar toggles the band on and off on every surface', async ($, on) 
 
   const off = await $.command.run({ command: 'context-bar', args: '' } as never)
   expect(off.text).toBe('Context bar off.')
+})
+
+test('the bar refreshes after every tool call, not only at turn end', async ($, on) => {
+  let used = 212_000
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('session.usage', () => ({ value: usageWith(used) }))
+  on('tool.call', () => ({ result: 'ok' }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'context-bar', args: '' } as never)
+
+  used = 300_000
+  await $.tool.call({ tool: 'Bash', input: { command: 'ls' } } as never)
+
+  const ui = await $.ui.mount({
+    plugin: 'context-bar',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 20, bodyColumns: 80 } as never,
+  })
+  expect(await ui.find({ type: 'Text', text: /300\.0k/ })).toBeDefined()
+  await ui.unmount()
 })

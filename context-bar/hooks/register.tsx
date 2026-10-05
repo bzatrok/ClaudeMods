@@ -44,6 +44,14 @@ export const register: Register = on => {
     return { text: shown ? 'Context bar on.' : 'Context bar off.' }
   })
 
+  /** Keeps the bar moving during long agent runs instead of only at turn end. */
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    if (await read($, isVisible)) await refresh($)
+
+    return result
+  })
+
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (await read($, isVisible)) await refresh($)

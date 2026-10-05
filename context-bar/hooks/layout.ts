@@ -51,11 +51,11 @@ export function toSnapshot(breakdown: SessionContextBreakdown): ContextBarSnapsh
 }
 
 /** 512, 3.4k, 212k, 1M, 1.2M — the way /context prints counts. */
+/** Exact up to five digits; from 100,000 one fixed decimal, so the width stays steady. */
 export function formatTokens(n: number): string {
-  if (n < 1000) return String(Math.round(n))
-  if (n < 10_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k`
-  if (n < 1_000_000) return `${Math.round(n / 1000)}k`
-  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (n < 100_000) return String(Math.round(n))
+  if (n < 999_950) return `${(n / 1000).toFixed(1)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
 }
 
 /** Under 1% keeps one decimal, so small categories do not all read 0%. */

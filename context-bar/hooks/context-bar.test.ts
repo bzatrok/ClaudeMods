@@ -13,11 +13,14 @@ const SNAP: ContextBarSnapshot = {
   ],
 }
 
-test('counts print the way /context prints them', () => {
+test('counts are exact below 100k and keep one decimal above', () => {
   expect(formatTokens(512)).toBe('512')
-  expect(formatTokens(3_400)).toBe('3.4k')
-  expect(formatTokens(212_000)).toBe('212k')
-  expect(formatTokens(1_000_000)).toBe('1M')
+  expect(formatTokens(99_999)).toBe('99999')
+  expect(formatTokens(100_000)).toBe('100.0k')
+  expect(formatTokens(999_960)).toBe('1.0M')
+  expect(formatTokens(3_400)).toBe('3400')
+  expect(formatTokens(212_000)).toBe('212.0k')
+  expect(formatTokens(1_000_000)).toBe('1.0M')
   expect(formatShare(3_400, 1_000_000)).toBe('0.3%')
   expect(formatShare(186_000, 1_000_000)).toBe('19%')
   expect(formatShare(9_970, 1_000_000)).toBe('1%')
@@ -47,7 +50,7 @@ test('free space is drawn shaded, not as a solid category', () => {
 
 test('legend ends with free space and wraps to the width', () => {
   const items = legendItems(SNAP)
-  expect(items[items.length - 1]).toEqual({ color: null, name: 'free', tokens: '788k', share: '' })
+  expect(items[items.length - 1]).toEqual({ color: null, name: 'free', tokens: '788.0k', share: '' })
   expect(legendLines(items, 30).length).toBeGreaterThan(1)
   expect(legendLines(items, 200).length).toBe(1)
 })
@@ -95,9 +98,9 @@ test('/context-bar toggles the band on and off on every surface', async ($, on) 
       component: 'AbovePrompt',
       props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 80 } as never,
     })
-    expect(await ui.find({ type: 'Text', text: /212k/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /compacts at 950k/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /free 788k/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /212\.0k/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /compacts at 950\.0k/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /free 788\.0k/ })).toBeDefined()
     await ui.unmount()
   }
 

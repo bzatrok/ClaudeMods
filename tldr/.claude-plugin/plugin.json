@@ -1,0 +1,5 @@
+{
+  "name": "tldr",
+  "version": "0.1.0",
+  "description": "/tldr: a short plain-English summary of Claude's last reply, shown as notice lines the model never reads"
+}

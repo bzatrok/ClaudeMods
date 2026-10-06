@@ -30,14 +30,15 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: 'Toggle the context window bar above the prompt',
+      description: 'Show the context window bar above the prompt (/context-bar off hides it)',
     })
 
     return next(e)
   })
 
-  on('command.run', { command: COMMAND }, async $ => {
-    const shown = !(await read($, isVisible))
+  /** Bare `/context-bar` always shows (and refreshes) the bar; `/context-bar off` hides it. */
+  on('command.run', { command: COMMAND }, async ($, e) => {
+    const shown = e.args.trim().toLowerCase() !== 'off'
     await update($, isVisible, () => shown)
     if (shown) await refresh($)
 

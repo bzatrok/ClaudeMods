@@ -109,7 +109,18 @@ test('/context-bar toggles the band on and off on every surface', async ($, on) 
     await ui.unmount()
   }
 
-  const off = await $.command.run({ command: 'context-bar', args: '' } as never)
+  const again = await $.command.run({ command: 'context-bar', args: '' } as never)
+  expect(again.text).toBe('Context bar on.')
+  const still = await $.ui.mount({
+    plugin: 'context-bar',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 20, bodyColumns: 80 } as never,
+  })
+  expect(await still.find({ type: 'Text', text: /212\.0k/ })).toBeDefined()
+  await still.unmount()
+
+  const off = await $.command.run({ command: 'context-bar', args: 'off' } as never)
   expect(off.text).toBe('Context bar off.')
 })
 

@@ -87,6 +87,8 @@ const usageWith = (used: number) => ({
 test('/context-bar toggles the band on and off on every surface', async ($, on) => {
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.usage', () => ({ value: usageWith(212_000) }))
+  // the engine's own band, an empty tree: the bar stacks on it
+  on('ui.render', { component: 'AbovePrompt' }, () => h('Box', {}) as never)
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
@@ -116,6 +118,7 @@ test('the bar refreshes after every tool call, not only at turn end', async ($, 
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('session.usage', () => ({ value: usageWith(used) }))
   on('tool.call', () => ({ result: 'ok' }))
+  on('ui.render', { component: 'AbovePrompt' }, () => h('Box', {}) as never)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
   await $.command.run({ command: 'context-bar', args: '' } as never)

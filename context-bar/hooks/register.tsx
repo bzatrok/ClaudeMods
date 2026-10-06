@@ -77,54 +77,60 @@ export const register: Register = on => {
     const percent = snap.max > 0 ? Math.round((snap.used / snap.max) * 100) : 0
     const lines = legendLines(legendItems(snap), inner)
 
+    // other mods (tldr) draw in the same band: stack above them, never replace them
+    const rest = await next(e)
+
     return (
-      <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
-        <Box justifyContent="space-between">
-          <Text>
-            <Text color="yellow">◆ </Text>
-            <Text bold>context</Text>
-          </Text>
-          <Text>
-            <Text bold>{formatTokens(snap.used)}</Text>
-            <Text dimColor> of {formatTokens(snap.max)}</Text>
-            {snap.compactAt !== null && (
-              <Text dimColor> · compacts at {formatTokens(snap.compactAt)}</Text>
-            )}
-            <Text> </Text>
-            <Text color="black" backgroundColor={percentColor(percent)}>
-              {' '}
-              {percent}%{' '}
+      <Box flexDirection="column">
+        <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
+          <Box justifyContent="space-between">
+            <Text>
+              <Text color="yellow">◆ </Text>
+              <Text bold>context</Text>
             </Text>
-          </Text>
-        </Box>
-        <Text wrap="truncate">
-          {barSegments(snap, inner).map(seg =>
-            seg.isMarker ? (
-              <Text color="yellow">{seg.text}</Text>
-            ) : seg.color === null ? (
-              <Text dimColor>{seg.text}</Text>
-            ) : (
-              <Text color={seg.color}>{seg.text}</Text>
-            ),
-          )}
-        </Text>
-        {lines.map(line => (
-          <Text wrap="truncate">
-            {line.map(item => (
-              <Text>
-                {item.color === null ? (
-                  <Text dimColor>{FREE} </Text>
-                ) : (
-                  <Text color={item.color}>▌ </Text>
-                )}
-                <Text>{item.name} </Text>
-                <Text>{item.tokens}</Text>
-                {item.share !== '' && <Text dimColor> {item.share}</Text>}
-                <Text>{'  '}</Text>
+            <Text>
+              <Text bold>{formatTokens(snap.used)}</Text>
+              <Text dimColor> of {formatTokens(snap.max)}</Text>
+              {snap.compactAt !== null && (
+                <Text dimColor> · compacts at {formatTokens(snap.compactAt)}</Text>
+              )}
+              <Text> </Text>
+              <Text color="black" backgroundColor={percentColor(percent)}>
+                {' '}
+                {percent}%{' '}
               </Text>
-            ))}
+            </Text>
+          </Box>
+          <Text wrap="truncate">
+            {barSegments(snap, inner).map(seg =>
+              seg.isMarker ? (
+                <Text color="yellow">{seg.text}</Text>
+              ) : seg.color === null ? (
+                <Text dimColor>{seg.text}</Text>
+              ) : (
+                <Text color={seg.color}>{seg.text}</Text>
+              ),
+            )}
           </Text>
-        ))}
+          {lines.map(line => (
+            <Text wrap="truncate">
+              {line.map(item => (
+                <Text>
+                  {item.color === null ? (
+                    <Text dimColor>{FREE} </Text>
+                  ) : (
+                    <Text color={item.color}>▌ </Text>
+                  )}
+                  <Text>{item.name} </Text>
+                  <Text>{item.tokens}</Text>
+                  {item.share !== '' && <Text dimColor> {item.share}</Text>}
+                  <Text>{'  '}</Text>
+                </Text>
+              ))}
+            </Text>
+          ))}
+        </Box>
+        {rest}
       </Box>
     )
   })

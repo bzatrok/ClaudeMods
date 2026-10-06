@@ -1,30 +1,45 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { buildPrompt, isAutoArg, isWorthSummarising, lastReply, SYSTEM, toLines } from './summarize'
+import type { TldrSummary } from '../types'
+
+import { buildPrompt, DEFAULT_LEVEL, isLevel, isWorthSummarising, lastReply, LEVELS, parseArgs, systemPrompt, toLines } from './summarize'
+import type { Level } from './summarize'
 
 const COMMAND = 'tldr'
+const LEVEL_KEY = 'level'
+
+/** Persisted: the reading level is a preference, kept across sessions. */
+async function readLevel($: EngineInterface): Promise<Level> {
+  const stored = await $.store.get(LEVEL_KEY)
+  return typeof stored === 'string' && isLevel(stored) ? stored : DEFAULT_LEVEL
+}
 
 /** Per session on purpose: every session starts off, `/tldr auto` turns it on for that session only. */
 const isAuto = atom({ plugin: 'tldr', key: 'isAuto' } as const, false)
 /** The box above the prompt; cleared when the next turn starts so it never describes an older reply. */
-const summary = atom({ plugin: 'tldr', key: 'summary' } as const, null as string[] | null)
+const summary = atom({ plugin: 'tldr', key: 'summary' } as const, null as TldrSummary | null)
 
 /**
  * The summary is drawn above the prompt, never sent: the model does not read
  * it and the conversation carries on untouched.
  */
 async function summarise($: EngineInterface, reply: string, args: string): Promise<void> {
-  $.ui.status('tldr…')
-  const result = await $.model.complete({
-    model: 'haiku',
-    system: SYSTEM,
-    prompt: buildPrompt(reply, args),
-    maxTokens: 600,
-    effort: 'low',
-    timeoutMs: 30_000,
-  })
-  $.ui.status(undefined)
+  // the engine prefixes the plugin name: this reads `tldr: summarising…`
+  $.ui.status('summarising…')
+  let result
+  try {
+    result = await $.model.complete({
+      model: 'haiku',
+      system: systemPrompt(await readLevel($)),
+      prompt: buildPrompt(reply, args),
+      maxTokens: 600,
+      effort: 'low',
+      timeoutMs: 30_000,
+    })
+  } finally {
+    $.ui.status(undefined)
+  }
 
   if (!result.isAnswered) {
     $.ui.log(`tldr: no summary (${result.reason})`)
@@ -37,17 +52,22 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: 'TL;DR of the last reply, not sent to the model ("auto" toggles it after every reply; else an extra ask, e.g. "one line")',
+      description: `TL;DR of the last reply, not sent to the model ("auto" toggles it after every reply; ${LEVELS.join('/')} sets the reading level; else an extra ask, e.g. "one line")`,
     })
 
     return next(e)
   })
 
   on('command.run', { command: COMMAND }, async ($, e) => {
-    if (isAutoArg(e.args)) {
+    const parsed = parseArgs(e.args)
+    if (parsed.kind === 'auto') {
       const enabled = !(await read($, isAuto))
       await update($, isAuto, () => enabled)
-      return { text: enabled ? 'tldr auto on.' : 'tldr auto off.' }
+      return { text: enabled ? 'auto on.' : 'auto off.' }
+    }
+    if (parsed.level !== undefined) {
+      await $.store.set(LEVEL_KEY, parsed.level)
+      $.ui.log(`tldr: level ${parsed.level}`)
     }
 
     const reply = lastReply(await $.session.messages())
@@ -55,7 +75,7 @@ export const register: Register = on => {
       $.ui.log('tldr: no reply to summarise yet')
       return {}
     }
-    await summarise($, reply, e.args)
+    await summarise($, reply, parsed.ask)
 
     return {}
   })

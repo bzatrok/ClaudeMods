@@ -1,5 +1,6 @@
 {
   "name": "tldr",
   "version": "0.1.0",
-  "description": "/tldr: a short plain-English summary of Claude's last reply, shown as notice lines the model never reads"
+  "description": "/tldr: a short plain-English summary of Claude's last reply, shown in a box above the prompt the model never reads",
+  "types": "./types/index.d.ts"
 }

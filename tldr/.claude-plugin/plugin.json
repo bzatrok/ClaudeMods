@@ -2,5 +2,31 @@
   "name": "tldr",
   "version": "0.1.0",
   "description": "/tldr: a short plain-English summary of Claude's last reply, shown in a box above the prompt the model never reads",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "eli5": {
+      "type": "string",
+      "title": "eli5 instructions",
+      "description": "Replaces the built-in eli5 wording rules (for a 5-year-old). Empty keeps the built-in.",
+      "default": ""
+    },
+    "eli8": {
+      "type": "string",
+      "title": "eli8 instructions",
+      "description": "Replaces the built-in eli8 wording rules (for a 8-year-old). Empty keeps the built-in.",
+      "default": ""
+    },
+    "eli12": {
+      "type": "string",
+      "title": "eli12 instructions",
+      "description": "Replaces the built-in eli12 wording rules (for a 12-year-old). Empty keeps the built-in.",
+      "default": ""
+    },
+    "eli15": {
+      "type": "string",
+      "title": "eli15 instructions",
+      "description": "Replaces the built-in eli15 wording rules (for a 15-year-old). Empty keeps the built-in.",
+      "default": ""
+    }
+  }
 }

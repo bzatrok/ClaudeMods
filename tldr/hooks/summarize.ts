@@ -16,11 +16,17 @@ export function isLevel(word: string): word is Level {
   return (LEVELS as readonly string[]).includes(word)
 }
 
+/** A level's rules from the plugin's config (`/config`, one field per level); blank keeps the built-in. */
+export function levelRules(level: Level, overrides: Readonly<Record<string, unknown>>): string {
+  const own = overrides[level]
+  return typeof own === 'string' && own.trim() !== '' ? own.trim() : LEVEL_RULES[level]
+}
+
 /** The level only changes the wording: paths, commands and numbers the person must act on are kept at every level. */
-export function systemPrompt(level: Level): string {
+export function systemPrompt(level: Level, overrides: Readonly<Record<string, unknown>> = {}): string {
   return [
     'You rewrite one assistant reply as a TL;DR for the person who read it.',
-    LEVEL_RULES[level],
+    levelRules(level, overrides),
     'Lead with the answer or the outcome in one or two sentences. Then up to 4 bullets with the points that matter most; do not label bullets with fixed headings.',
     'Keep every file path, command and number the person has to act on, verbatim. Drop everything else.',
     'Do not add facts. Do not address the assistant. No preamble, no heading.',
@@ -46,17 +52,46 @@ export function isWorthSummarising(answer: string): boolean {
 
 export type Parsed =
   | { kind: 'auto' }
+  /** Rewrite a level's rules from feedback; saved to settings. */
+  | { kind: 'tune'; level: Level; feedback: string }
+  /** Back to the built-in rules for a level. */
+  | { kind: 'reset'; level: Level }
+  /** A malformed `tune` / `reset`: what to say instead. */
+  | { kind: 'usage'; text: string }
   /** `level` set when the first word names one: it is remembered; `ask` is what is left. */
   | { kind: 'summarise'; level: Level | undefined; ask: string }
 
-/** `/tldr auto` toggles; `/tldr eli5 [ask]` sets the level, then summarises; else the args are an extra ask. */
+const USAGE = `usage: /tldr tune <${LEVELS.join('|')}> <feedback>, /tldr reset <level>`
+
+/**
+ * `/tldr auto` toggles; `/tldr tune eli5 <feedback>` and `/tldr reset eli5` change a level's rules;
+ * `/tldr eli5 [ask]` sets the level, then summarises; else the args are an extra ask.
+ */
 export function parseArgs(args: string): Parsed {
   const trimmed = args.trim()
-  if (trimmed.toLowerCase() === 'auto') return { kind: 'auto' }
-  const [first = '', ...rest] = trimmed.split(/\s+/)
-  const word = first.toLowerCase()
-  if (isLevel(word)) return { kind: 'summarise', level: word, ask: rest.join(' ') }
+  const [first = '', second = '', ...rest] = trimmed.split(/\s+/)
+  const verb = first.toLowerCase()
+  const level = second.toLowerCase()
+  if (verb === 'auto' && second === '') return { kind: 'auto' }
+  if (verb === 'tune') {
+    const feedback = rest.join(' ')
+    return isLevel(level) && feedback !== '' ? { kind: 'tune', level, feedback } : { kind: 'usage', text: USAGE }
+  }
+  if (verb === 'reset') return isLevel(level) && rest.length === 0 ? { kind: 'reset', level } : { kind: 'usage', text: USAGE }
+  if (isLevel(verb)) return { kind: 'summarise', level: verb, ask: [second, ...rest].join(' ').trim() }
   return { kind: 'summarise', level: undefined, ask: trimmed }
+}
+
+export const TUNE_SYSTEM = [
+  'You maintain the wording rules a summariser follows at one reading level.',
+  'You get the current rules and feedback from the person who reads the summaries.',
+  'Return the full revised rules: 1 to 4 imperative sentences, addressed to the summariser, under 400 characters.',
+  'Keep what the feedback does not contradict. Do not mention file paths, commands or bullets: other rules cover those.',
+  'Return only the rules, no preamble, no quotes.',
+].join(' ')
+
+export function buildTunePrompt(level: Level, current: string, feedback: string): string {
+  return `<level>${level}</level>\n<current>\n${current}\n</current>\n<feedback>\n${feedback}\n</feedback>`
 }
 
 /** `args` is an optional extra ask (`/tldr one line`), appended as an instruction. */

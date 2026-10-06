@@ -91,6 +91,10 @@ test('auto arg and short replies', () => {
   expect(parseArgs('one line')).toEqual({ kind: 'summarise', level: undefined, ask: 'one line' })
   expect(parseArgs('ELI5 one line')).toEqual({ kind: 'summarise', level: 'eli5', ask: 'one line' })
   expect(parseArgs('eli6')).toEqual({ kind: 'summarise', level: undefined, ask: 'eli6' })
+  expect(parseArgs('tune ELI5 not childish, just simple')).toEqual({ kind: 'tune', level: 'eli5', feedback: 'not childish, just simple' })
+  expect(parseArgs('tune eli5').kind).toBe('usage')
+  expect(parseArgs('tune eli6 simpler').kind).toBe('usage')
+  expect(parseArgs('reset eli8')).toEqual({ kind: 'reset', level: 'eli8' })
   expect(isWorthSummarising('short')).toBe(false)
   expect(isWorthSummarising('x'.repeat(400))).toBe(true)
 })
@@ -136,6 +140,9 @@ test('levels change the wording rules, never the keep-the-paths rule', () => {
   expect(systemPrompt('eli5')).toContain('5-year-old')
   expect(systemPrompt('eli15')).toContain('15-year-old')
   for (const level of ['eli5', 'eli15'] as const) expect(systemPrompt(level)).toContain('verbatim')
+  expect(systemPrompt('eli5', { eli5: ' Talk like a pirate. ' })).toContain('Talk like a pirate.')
+  expect(systemPrompt('eli5', { eli5: ' Talk like a pirate. ' })).not.toContain('5-year-old')
+  expect(systemPrompt('eli5', { eli5: '  ' })).toContain('5-year-old')
 })
 
 test('/tldr eli5 remembers the level and summarises with it', async ($, on) => {
@@ -158,4 +165,54 @@ test('/tldr eli5 remembers the level and summarises with it', async ($, on) => {
   expect(systems[0]).toContain('12-year-old')
   expect(systems[1]).toContain('5-year-old')
   expect(systems[2]).toContain('5-year-old')
+})
+
+test('a /config override reaches the model', { options: { eli12: 'Use only words of one syllable.' } }, async ($, on) => {
+  let system = ''
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('session.messages', () => ({ value: [msg('user', 'q'), msg('assistant', 'long answer')] as never }))
+  on('model.complete', ($, e) => {
+    system = e.system ?? ''
+    return { value: { isAnswered: true, text: 'Short.', usage: {} } as never }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  stubStore(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+
+  await $.command.run({ command: 'tldr', args: '' } as never)
+  expect(system).toContain('Use only words of one syllable.')
+})
+
+test('/tldr tune has sonnet rewrite the rules and saves them as the config field', async ($, on) => {
+  const calls: { model: string; prompt: string }[] = []
+  const saved: { key: string; value: unknown }[] = []
+  const logs: string[] = []
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('model.complete', ($, e) => {
+    calls.push({ model: String(e.model), prompt: e.prompt })
+    return { value: { isAnswered: true, text: ' Use plain adult words. ', usage: {} } as never }
+  })
+  on('config.set', ($, e) => {
+    saved.push({ key: e.key, value: e.value })
+    return { value: e.value } as never
+  })
+  on('ui.log', ($, e) => {
+    logs.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.status', () => ({ value: undefined }))
+  stubStore(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal', isInteractive: true })
+
+  await $.command.run({ command: 'tldr', args: 'tune eli5 not childish, just simple' } as never)
+  expect(calls[0]?.model).toBe('sonnet')
+  expect(calls[0]?.prompt).toContain('5-year-old')
+  expect(calls[0]?.prompt).toContain('not childish, just simple')
+  expect(saved).toEqual([{ key: 'tldr.eli5', value: 'Use plain adult words.' }])
+  expect(logs).toEqual(['tldr: eli5 rules now: Use plain adult words.'])
+
+  await $.command.run({ command: 'tldr', args: 'reset eli5' } as never)
+  expect(saved[1]).toEqual({ key: 'tldr.eli5', value: '' })
 })

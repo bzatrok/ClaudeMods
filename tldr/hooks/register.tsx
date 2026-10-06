@@ -1,9 +1,22 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, PluginOptions, Register } from 'claude-code'
 
 import type { TldrSummary } from '../types'
 
-import { buildPrompt, DEFAULT_LEVEL, isLevel, isWorthSummarising, lastReply, LEVELS, parseArgs, systemPrompt, toLines } from './summarize'
+import {
+  buildPrompt,
+  buildTunePrompt,
+  DEFAULT_LEVEL,
+  isLevel,
+  isWorthSummarising,
+  lastReply,
+  levelRules,
+  LEVELS,
+  parseArgs,
+  systemPrompt,
+  toLines,
+  TUNE_SYSTEM,
+} from './summarize'
 import type { Level } from './summarize'
 
 const COMMAND = 'tldr'
@@ -24,14 +37,14 @@ const summary = atom({ plugin: 'tldr', key: 'summary' } as const, null as TldrSu
  * The summary is drawn above the prompt, never sent: the model does not read
  * it and the conversation carries on untouched.
  */
-async function summarise($: EngineInterface, reply: string, args: string): Promise<void> {
+async function summarise($: EngineInterface, options: PluginOptions, reply: string, args: string): Promise<void> {
   // the engine prefixes the plugin name: this reads `tldr: summarising…`
   $.ui.status('summarising…')
   let result
   try {
     result = await $.model.complete({
       model: 'haiku',
-      system: systemPrompt(await readLevel($)),
+      system: systemPrompt(await readLevel($), options),
       prompt: buildPrompt(reply, args),
       maxTokens: 600,
       effort: 'low',
@@ -48,11 +61,40 @@ async function summarise($: EngineInterface, reply: string, args: string): Promi
   await update($, summary, () => toLines(result.text))
 }
 
-export const register: Register = on => {
+/** `options` holds the per-level overrides from `/config`; a change there reloads the module. */
+/**
+ * Sonnet rewrites the level's rules from the feedback: rare, and worth the better wording.
+ * Saved as the plugin's `/config` field (`tldr.<level>`), so it is global and editable there.
+ */
+async function tune($: EngineInterface, options: PluginOptions, level: Level, feedback: string): Promise<void> {
+  $.ui.status(`tuning ${level}…`)
+  let result
+  try {
+    result = await $.model.complete({
+      model: 'sonnet',
+      system: TUNE_SYSTEM,
+      prompt: buildTunePrompt(level, levelRules(level, options), feedback),
+      maxTokens: 400,
+      effort: 'low',
+      timeoutMs: 60_000,
+    })
+  } finally {
+    $.ui.status(undefined)
+  }
+  if (!result.isAnswered) {
+    $.ui.log(`tldr: ${level} not changed (${result.reason})`)
+    return
+  }
+  const rules = result.text.trim()
+  const { deny } = await $.config.set({ key: `tldr.${level}`, value: rules })
+  $.ui.log(deny === undefined ? `tldr: ${level} rules now: ${rules}` : `tldr: ${level} not saved (${deny})`)
+}
+
+export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: `TL;DR of the last reply, not sent to the model ("auto" toggles it after every reply; ${LEVELS.join('/')} sets the reading level; else an extra ask, e.g. "one line")`,
+      description: `TL;DR of the last reply, not sent to the model ("auto" toggles it after every reply; ${LEVELS.join('/')} sets the reading level; "tune <level> <feedback>" rewrites a level's rules; else an extra ask, e.g. "one line")`,
     })
 
     return next(e)
@@ -65,6 +107,19 @@ export const register: Register = on => {
       await update($, isAuto, () => enabled)
       return { text: enabled ? 'auto on.' : 'auto off.' }
     }
+    if (parsed.kind === 'usage') {
+      $.ui.log(`tldr: ${parsed.text}`)
+      return {}
+    }
+    if (parsed.kind === 'tune') {
+      await tune($, options, parsed.level, parsed.feedback)
+      return {}
+    }
+    if (parsed.kind === 'reset') {
+      const { deny } = await $.config.set({ key: `tldr.${parsed.level}`, value: '' })
+      $.ui.log(deny === undefined ? `tldr: ${parsed.level} back to built-in rules` : `tldr: ${parsed.level} not reset (${deny})`)
+      return {}
+    }
     if (parsed.level !== undefined) {
       await $.store.set(LEVEL_KEY, parsed.level)
       $.ui.log(`tldr: level ${parsed.level}`)
@@ -75,7 +130,7 @@ export const register: Register = on => {
       $.ui.log('tldr: no reply to summarise yet')
       return {}
     }
-    await summarise($, reply, parsed.ask)
+    await summarise($, options, reply, parsed.ask)
 
     return {}
   })
@@ -90,7 +145,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (e.agentId === undefined && e.reason === 'answer' && isWorthSummarising(e.answer) && (await read($, isAuto))) {
-      void summarise($, e.answer, '')
+      void summarise($, options, e.answer, '')
     }
 
     return result

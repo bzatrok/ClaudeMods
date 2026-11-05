@@ -1,4 +1,5 @@
-import type { Shaped } from 'claude-code'
+/** Same shape as the engine's `Shaped`: a value stored under a tag, read as absent under another. */
+export type CockpitShaped<T> = { shape: string; value: T }
 
 /** The five lines the model writes through `cockpit_update`. Strings default to "". */
 export type CockpitBlock = {
@@ -31,11 +32,11 @@ export type CockpitWorker = {
 declare module 'claude-code' {
   interface PluginState {
     cockpit: {
-      block: Shaped<CockpitBlock>
-      gauge: Shaped<CockpitGauge>
-      workers: Shaped<CockpitWorker[]>
-      collapsed: Shaped<boolean>
-      editsSinceUpdate: Shaped<number>
+      block: CockpitShaped<CockpitBlock>
+      gauge: CockpitShaped<CockpitGauge>
+      workers: CockpitShaped<CockpitWorker[]>
+      collapsed: CockpitShaped<boolean>
+      editsSinceUpdate: CockpitShaped<number>
     }
   }
 }

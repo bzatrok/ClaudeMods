@@ -279,8 +279,8 @@ export const register: Register = (on, options) => {
                 <Button
                   key="collapse"
                   label={isCollapsed ? 'expand' : 'collapse'}
+                  // c works only while the band holds the focus, so the label shows no key hint
                   hotkey="c"
-                  plain
                   onPress={() => toggle($)}
                 />
               </Box>

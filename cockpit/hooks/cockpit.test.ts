@@ -90,7 +90,7 @@ test('the band shows six rows and the workers, and drops rows to fit maxRows', a
   await complete($)
 
   const full = await $.ui.mount(BAND(12))
-  for (const re of [/ctx 14%/, /ship the band/, /writing tests/, /skeleton/, /review/, /no file writes/]) {
+  for (const re of [/context 140\.0k of 1\.0M/, /ship the band/, /writing tests/, /skeleton/, /review/, /no file writes/]) {
     expect(await full.find({ type: 'Text', text: re })).toBeDefined()
   }
   expect((await full.findAll({ type: 'Text', text: /^worker / })).length).toBe(2)
@@ -207,7 +207,7 @@ test('layout: empty block shows the placeholder; board rows parse', () => {
     columns: 80,
     maxRows: 12,
   })
-  expect(rows.map(r => r.text)).toEqual(['ctx 0% ▯▯▯▯▯▯▯▯▯▯ · not compacted yet', 'now:         (no cockpit_update yet)'])
+  expect(rows.map(r => r.text)).toEqual(['context 0 of 0 ▯▯▯▯▯▯▯▯▯▯ · compacts at 200.0k · not compacted yet', 'now:         (no cockpit_update yet)'])
   expect(parseBoard(BOARD)[1]?.worker).toEqual({ id: 'T-2', kind: 'board', provider: 'glm', branch: 'feat/b', since: '2026-11-05' })
 })
 

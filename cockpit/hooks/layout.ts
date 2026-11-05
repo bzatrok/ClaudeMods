@@ -39,14 +39,23 @@ export function formatAgo(ms: number): string {
   return `${Math.round(s / 3600)}h`
 }
 
+/** Same format as context-bar's: exact below 100k, then k, then M. */
+export function formatTokens(n: number): string {
+  if (n < 100_000) return String(Math.round(n))
+  if (n < 999_950) return `${(n / 1000).toFixed(1)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+
 export function gaugeText(gauge: CockpitGauge, workers: number, now: number, threshold: number): string {
   const compacted =
     gauge.lastCompactionAt === undefined
       ? 'not compacted yet'
       : `compacted ${formatAgo(now - gauge.lastCompactionAt)} ago`
-  const parts = [`ctx ${Math.round(gauge.percent)}% ${bar(gauge.percent)}`, compacted]
+  // absolute numbers like context-bar: a percent hides which window it is a share of
+  const parts = [`context ${formatTokens(gauge.used)} of ${formatTokens(gauge.max)} ${bar(gauge.percent)}`]
+  parts.push(gauge.used >= threshold ? 'compaction expected at next boundary' : `compacts at ${formatTokens(threshold)}`)
+  parts.push(compacted)
   if (workers > 0) parts.push(`${workers} worker${workers === 1 ? '' : 's'}`)
-  if (gauge.used >= threshold) parts.push('compaction expected at next boundary')
 
   return parts.join(' · ')
 }

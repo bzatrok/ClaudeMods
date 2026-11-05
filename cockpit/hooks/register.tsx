@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { CockpitBlock, CockpitGauge, CockpitNote, CockpitWorker } from '../types'
 import { buildNote, notesFor, pushNote, resumePrompt, shouldCompact, withPreserve } from './compaction'
+import { FILL_SYSTEM, fillPrompt, parseFill } from './fill'
 import { EMPTY_BLOCK, EMPTY_GAUGE, buildRows, mergeWorkers, parseBoard } from './layout'
 
 const COMMAND = 'cockpit'
@@ -24,7 +25,38 @@ const workers = atom({ plugin: 'cockpit', key: 'workers' } as const, [] as Cockp
 const collapsed = atom({ plugin: 'cockpit', key: 'collapsed' } as const, false, SHAPE)
 const editsSinceUpdate = atom({ plugin: 'cockpit', key: 'editsSinceUpdate' } as const, 0, SHAPE)
 
-const toggle = ($: EngineInterface) => update($, collapsed, c => !c)
+/** Expanding with an empty block fills it from the transcript, so a running session needs no first update. */
+async function setCollapsed($: EngineInterface, value: boolean): Promise<void> {
+  await update($, collapsed, () => value)
+  if (value) return
+  await refreshGauge($)
+  await fill($)
+}
+
+const toggle = async ($: EngineInterface) => setCollapsed($, !(await read($, collapsed)))
+
+/** Haiku states goal/now/done/next/constraints from the transcript; the model's own cockpit_update always wins. */
+async function fill($: EngineInterface): Promise<void> {
+  if ((await read($, block)).updatedAt > 0) return
+  const prompt = fillPrompt(await $.session.messages())
+  if (prompt === undefined) return
+  $.ui.status('filling…')
+  let result
+  try {
+    result = await $.model.complete({ model: 'haiku', system: FILL_SYSTEM, prompt, maxTokens: 300, effort: 'low', timeoutMs: 30_000 })
+  } finally {
+    $.ui.status(undefined)
+  }
+  if (!result.isAnswered) {
+    $.ui.log(`cockpit: no fill (${result.reason})`)
+    return
+  }
+  const filled = parseFill(result.text)
+  if (filled === undefined) return
+  const updatedAt = await $.clock.now()
+  // a cockpit_update that landed while Haiku ran is newer: keep it
+  await update($, block, prev => (prev.updatedAt > 0 ? prev : { ...prev, ...filled, updatedAt }))
+}
 
 async function refreshGauge($: EngineInterface): Promise<void> {
   const breakdown = (await $.session.usage({ breakdown: 'summary' })).context.breakdown
@@ -77,7 +109,7 @@ export const register: Register = (on, options) => {
 
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band; `note` prints the latest pre-compaction note, `notes` lists them' })
+    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band (`on`, `off`); expanding fills an empty band from the conversation; `note` prints the latest pre-compaction note, `notes` lists them' })
     await $.tool.register({
       name: 'cockpit_update',
       description:
@@ -100,7 +132,10 @@ export const register: Register = (on, options) => {
       if (isWorking) void refresh($, cwd, false)
     })
 
-    return next(e)
+    const result = await next(e)
+    // the band shows a real number before the first turn ends; a failed read keeps 0%
+    await refreshGauge($).catch(() => undefined)
+    return result
   })
 
   on('command.run', { command: COMMAND }, async ($, e) => {
@@ -111,7 +146,8 @@ export const register: Register = (on, options) => {
 
       return { text: sub === 'note' ? (mine[mine.length - 1] as CockpitNote).text : mine.map(n => n.header).join('\n') }
     }
-    await toggle($)
+    if (sub === 'on' || sub === 'off') await setCollapsed($, sub === 'off')
+    else await toggle($)
     return { text: (await read($, collapsed)) ? 'Cockpit collapsed.' : 'Cockpit expanded.' }
   })
 
@@ -222,8 +258,9 @@ export const register: Register = (on, options) => {
       collapsed: isCollapsed,
       now: await $.clock.now(),
       threshold,
-      columns: e.props.bodyColumns,
-      maxRows: e.props.maxRows,
+      // round border (2) + paddingX (2) across, border (2) down
+      columns: Math.max(10, e.props.bodyColumns - 4),
+      maxRows: Math.max(1, e.props.maxRows - 2),
     })
     // other mods (tldr) draw in the same band: stack above them, never replace them
     const rest = await next(e)
@@ -232,25 +269,27 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        {rows.map(row =>
-          row.kind === 'gauge' ? (
-            <Box key={row.key} justifyContent="space-between">
-              <Text wrap="truncate" color={gaugeColor}>
+        <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
+          {rows.map(row =>
+            row.kind === 'gauge' ? (
+              <Box key={row.key} justifyContent="space-between">
+                <Text wrap="truncate" color={gaugeColor}>
+                  {row.text}
+                </Text>
+                <Button
+                  key="collapse"
+                  label={isCollapsed ? '[c] expand' : '[c] collapse'}
+                  hotkey="c"
+                  onPress={() => toggle($)}
+                />
+              </Box>
+            ) : (
+              <Text key={row.key} wrap="truncate" dimColor={row.kind === 'worker'}>
                 {row.text}
               </Text>
-              <Button
-                key="collapse"
-                label={isCollapsed ? '[c] expand' : '[c] collapse'}
-                hotkey="c"
-                onPress={() => toggle($)}
-              />
-            </Box>
-          ) : (
-            <Text key={row.key} wrap="truncate" dimColor={row.kind === 'worker'}>
-              {row.text}
-            </Text>
-          ),
-        )}
+            ),
+          )}
+        </Box>
         {rest}
       </Box>
     )

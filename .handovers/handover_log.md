@@ -29,6 +29,8 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 - [auto-compaction](handover_003_auto-compaction.md) — teamwork rule 10 ("the lead cannot trigger compaction") becomes false once the mod loads. Rejected: leaving the rule as is.
 - [situation-band](handover_002_situation-band.md) — band drops rows workers, constraints, done, next, goal under `maxRows`. Rejected: scrolling a taller band (hides now).
 - [situation-band](handover_002_situation-band.md) — state keys use a local `CockpitShaped<T>` in the contract, because the validator forbids imports there. Rejected: importing `Shaped` from claude-code.
+- [auto-compaction](handover_003_auto-compaction.md) — trigger = `phase_done` boundary + `thresholdTokens` (userConfig, default 200000) + 5-minute cooldown; the boundary is cleared after a compaction. Rejected: compacting on a number alone, a hard cap.
+- [auto-compaction](handover_003_auto-compaction.md) — preserve list appended to `e.instructions` for every non-precompute compaction; resume prompt appended as the last user message. Rejected: replacing the person's `/compact` text.
 
 ## Not yet specified
 <!-- in-scope questions you can see coming but cannot yet state sharply -->
@@ -43,4 +45,4 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 |---|------|------|--------|--------|---------|-----------|
 | 001 | [task-board-skill](handover_001_task-board-skill.md) | Shared `task-board` skill; teamwork and source-port call it | ⬜ pending | — (no git under ~/.claude) | 2026-11-05 | — |
 | 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | ✅ done | feat/situation-band | 2026-11-05 | 2026-11-05 |
-| 003 | [auto-compaction](handover_003_auto-compaction.md) | Compact at a task boundary past 200k with note and resume prompt | ⬜ pending | feat/auto-compaction | 2026-11-05 | — |
+| 003 | [auto-compaction](handover_003_auto-compaction.md) | Compact at a task boundary past 200k with note and resume prompt | ✅ done | feat/auto-compaction | 2026-11-05 | 2026-11-05 |

@@ -35,14 +35,21 @@ async function refreshGauge($: EngineInterface): Promise<void> {
   await update($, gauge, g => ({ ...g, used, max, percent: max > 0 ? (used / max) * 100 : 0, measuredAt }))
 }
 
-/** Board rows from `tools/task.py` when the repo has one, then running subagents. A failed read keeps the last roster. */
-async function refreshWorkers($: EngineInterface, cwd: string): Promise<void> {
-  const board: ReturnType<typeof parseBoard> = []
+// last board read; the timer reuses it so the board script runs once per turn, not every tick
+let board: ReturnType<typeof parseBoard> = []
+
+/**
+ * Running subagents, plus board rows from `tools/task.py` when `readBoard` and the repo has one.
+ * A failed read keeps the last roster.
+ */
+async function refreshWorkers($: EngineInterface, cwd: string, readBoard: boolean): Promise<void> {
   try {
-    if (await $.fs.exists(`${cwd}/${BOARD_SCRIPT}`)) {
-      const run = await $.process.run(['python3', '-I', BOARD_SCRIPT, 'list', '--state', 'claimed'], { cwd })
-      if (run.exitCode !== 0) return
-      board.push(...parseBoard(run.stdout))
+    if (readBoard) {
+      if (await $.fs.exists(`${cwd}/${BOARD_SCRIPT}`)) {
+        const run = await $.process.run(['python3', '-I', BOARD_SCRIPT, 'list', '--state', 'claimed'], { cwd })
+        if (run.exitCode !== 0) return
+        board = parseBoard(run.stdout)
+      } else board = []
     }
     const subagents = (await $.agent.list())
       .filter(a => a.status === 'running')
@@ -56,9 +63,10 @@ async function refreshWorkers($: EngineInterface, cwd: string): Promise<void> {
   }
 }
 
-async function refresh($: EngineInterface, cwd: string): Promise<void> {
+/** Turn end reads the board; the timer during a turn reads only usage and subagents. */
+async function refresh($: EngineInterface, cwd: string, readBoard: boolean): Promise<void> {
   await refreshGauge($)
-  await refreshWorkers($, cwd)
+  await refreshWorkers($, cwd, readBoard)
 }
 
 export const register: Register = (on, options) => {
@@ -89,7 +97,7 @@ export const register: Register = (on, options) => {
     })
     tick?.cancel()
     tick = $.clock.every(REFRESH_MS, () => {
-      if (isWorking) void refresh($, cwd)
+      if (isWorking) void refresh($, cwd, false)
     })
 
     return next(e)
@@ -149,7 +157,7 @@ export const register: Register = (on, options) => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
     isWorking = false
-    await refresh($, cwd)
+    await refresh($, cwd, true)
 
     const reply = (await read($, editsSinceUpdate)) > 0 ? { ...result, text: NUDGE } : result
     const compact = shouldCompact({

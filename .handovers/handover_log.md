@@ -32,6 +32,8 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 - [auto-compaction](handover_003_auto-compaction.md) — trigger = `phase_done` boundary + `thresholdTokens` (userConfig, default 200000) + 5-minute cooldown; the boundary is cleared after a compaction. Rejected: compacting on a number alone, a hard cap.
 - [auto-compaction](handover_003_auto-compaction.md) — preserve list appended to `e.instructions` for every non-precompute compaction; resume prompt appended as the last user message. Rejected: replacing the person's `/compact` text.
 
+- [auto-compaction](handover_003_auto-compaction.md) — the band runs the board script once per turn end; the 20 s timer during a turn reads only usage and subagents (Ben, 2026-11-05). Rejected: the script on every tick.
+
 ## Not yet specified
 <!-- in-scope questions you can see coming but cannot yet state sharply -->
 - Exact row budget the band gets in a non-fullscreen terminal. The band reads `maxRows` and drops rows to fit, but 002 could not measure it: not measurable in test (no live terminal). Read it in a 40-row tab and record it here.

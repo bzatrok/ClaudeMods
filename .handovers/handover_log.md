@@ -27,10 +27,12 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 - [situation-band](handover_002_situation-band.md) — nudge from `turn.complete` after a turn that edited files without an update. Rejected: nudge per tool call (noise).
 - [auto-compaction](handover_003_auto-compaction.md) — the note lives in `$.store`, shown by `/cockpit note`; the resume prompt is injected as the first message after compaction by the `session.compact` hook. Rejected: a file in the repo (the ClaudeMods rule: a mod never writes files); appending to `handover_log.md` (index, not store); asking Ben to paste (what we are removing).
 - [auto-compaction](handover_003_auto-compaction.md) — teamwork rule 10 ("the lead cannot trigger compaction") becomes false once the mod loads. Rejected: leaving the rule as is.
+- [situation-band](handover_002_situation-band.md) — band drops rows workers, constraints, done, next, goal under `maxRows`. Rejected: scrolling a taller band (hides now).
+- [situation-band](handover_002_situation-band.md) — state keys use a local `CockpitShaped<T>` in the contract, because the validator forbids imports there. Rejected: importing `Shaped` from claude-code.
 
 ## Not yet specified
 <!-- in-scope questions you can see coming but cannot yet state sharply -->
-- Exact row budget the band gets in a non-fullscreen terminal. Read `maxRows` at render; the executor of 002 reports the numbers.
+- Exact row budget the band gets in a non-fullscreen terminal. The band reads `maxRows` and drops rows to fit, but 002 could not measure it: not measurable in test (no live terminal). Read it in a 40-row tab and record it here.
 
 ## Out of scope
 <!-- ruled out of this effort, with the reason. It stays ruled out. -->
@@ -40,5 +42,5 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 | # | Slug | Goal | Status | Branch | Created | Completed |
 |---|------|------|--------|--------|---------|-----------|
 | 001 | [task-board-skill](handover_001_task-board-skill.md) | Shared `task-board` skill; teamwork and source-port call it | ⬜ pending | — (no git under ~/.claude) | 2026-11-05 | — |
-| 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | 🔄 in-progress | feat/situation-band | 2026-11-05 | — |
+| 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | ✅ done | feat/situation-band | 2026-11-05 | 2026-11-05 |
 | 003 | [auto-compaction](handover_003_auto-compaction.md) | Compact at a task boundary past 200k with note and resume prompt | ⬜ pending | feat/auto-compaction | 2026-11-05 | — |

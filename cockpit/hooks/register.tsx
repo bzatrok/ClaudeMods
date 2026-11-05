@@ -278,8 +278,9 @@ export const register: Register = (on, options) => {
                 </Text>
                 <Button
                   key="collapse"
-                  label={isCollapsed ? '[c] expand' : '[c] collapse'}
+                  label={isCollapsed ? 'expand' : 'collapse'}
                   hotkey="c"
+                  plain
                   onPress={() => toggle($)}
                 />
               </Box>

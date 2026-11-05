@@ -1,13 +1,16 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { CockpitBlock, CockpitGauge, CockpitWorker } from '../types'
+import type { CockpitBlock, CockpitGauge, CockpitNote, CockpitWorker } from '../types'
+import { buildNote, notesFor, pushNote, resumePrompt, shouldCompact, withPreserve } from './compaction'
 import { EMPTY_BLOCK, EMPTY_GAUGE, buildRows, mergeWorkers, parseBoard } from './layout'
 
 const COMMAND = 'cockpit'
 const UPDATE_TOOL = 'mcp__cockpit__cockpit_update'
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 const REFRESH_MS = 20_000
+const NOTES_KEY = 'cockpit.notes'
+const DEFAULT_THRESHOLD = 200_000
 const BOARD_SCRIPT = 'tools/task.py'
 const NUDGE = 'cockpit: the situation block is stale; call cockpit_update.'
 const PROMPT_LINE =
@@ -58,14 +61,15 @@ async function refresh($: EngineInterface, cwd: string): Promise<void> {
   await refreshWorkers($, cwd)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const threshold = typeof options.thresholdTokens === 'number' ? options.thresholdTokens : DEFAULT_THRESHOLD
   let cwd = ''
   let isWorking = false
   let tick: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band above the prompt' })
+    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band; `note` prints the latest pre-compaction note, `notes` lists them' })
     await $.tool.register({
       name: 'cockpit_update',
       description:
@@ -91,7 +95,14 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: COMMAND }, async $ => {
+  on('command.run', { command: COMMAND }, async ($, e) => {
+    const sub = e.args.trim()
+    if (sub === 'note' || sub === 'notes') {
+      const mine = notesFor(((await $.store.get(NOTES_KEY)) as CockpitNote[] | undefined) ?? [], cwd)
+      if (mine.length === 0) return { text: 'No pre-compaction notes for this directory yet.' }
+
+      return { text: sub === 'note' ? (mine[mine.length - 1] as CockpitNote).text : mine.map(n => n.header).join('\n') }
+    }
     await toggle($)
     return { text: (await read($, collapsed)) ? 'Cockpit collapsed.' : 'Cockpit expanded.' }
   })
@@ -140,16 +151,55 @@ export const register: Register = on => {
     isWorking = false
     await refresh($, cwd)
 
-    return (await read($, editsSinceUpdate)) > 0 ? { ...result, text: NUDGE } : result
+    const reply = (await read($, editsSinceUpdate)) > 0 ? { ...result, text: NUDGE } : result
+    const compact = shouldCompact({
+      block: await read($, block),
+      gauge: await read($, gauge),
+      threshold,
+      now: await $.clock.now(),
+    })
+    if (compact) {
+      try {
+        const done = await $.session.compact({ instructions: withPreserve(undefined) })
+        // the boundary is spent: the next one needs a new phase_done
+        if (!done.skip) {
+          const lastCompactionAt = await $.clock.now()
+          await update($, gauge, g => ({ ...g, lastCompactionAt }))
+          await update($, block, b => ({ ...b, phaseDone: false }))
+        }
+      } catch {
+        // a turn started or the engine refused: the next boundary tries again
+      }
+    }
+
+    return reply
   })
 
-  /** Observes only; handover 003 extends this one function. */
+  /** Down: preserve list and note (not on precompute). Up: the resume prompt as the last message. */
   on('session.compact', async ($, e, next) => {
-    const result = await next(e)
-    const lastCompactionAt = await $.clock.now()
-    await update($, gauge, g => ({ ...g, lastCompactionAt }))
+    if (e.trigger === 'precompute') return next(e)
 
-    return result
+    const [b, g, w] = [await read($, block), await read($, gauge), await read($, workers)]
+    const all = ((await $.store.get(NOTES_KEY)) as CockpitNote[] | undefined) ?? []
+    const note = buildNote({
+      cwd,
+      trigger: e.trigger,
+      n: notesFor(all, cwd).length + 1,
+      at: new Date(await $.clock.now()).toISOString(),
+      block: b,
+      gauge: g,
+      workers: w,
+    })
+    await $.store.set(NOTES_KEY, pushNote(all, note))
+
+    const result = await next({ ...e, instructions: withPreserve(e.instructions) })
+    if (result.skip !== undefined) return result
+
+    const lastCompactionAt = await $.clock.now()
+    await update($, gauge, x => ({ ...x, lastCompactionAt }))
+    const resume = { role: 'user' as const, text: resumePrompt(cwd, b, w), toolUses: [] }
+
+    return { ...result, messages: [...result.messages, resume] }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {

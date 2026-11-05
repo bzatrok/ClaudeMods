@@ -31,6 +31,7 @@ export function systemPrompt(level: Level, overrides: Readonly<Record<string, un
     'Keep every file path, command and number the person has to act on, verbatim. Drop everything else.',
     'Do not add facts. Do not address the assistant. No preamble, no heading.',
     'Plain text only: no bold, no italics, no headings; bullets start with "- ".',
+    'If the request ends with an <ask>, it overrides the length and shape rules above: follow it exactly, even if that means no bullets.',
   ].join(' ')
 }
 
@@ -96,7 +97,7 @@ export function buildTunePrompt(level: Level, current: string, feedback: string)
 
 /** `args` is an optional extra ask (`/tldr one line`), appended as an instruction. */
 export function buildPrompt(reply: string, args: string): string {
-  const extra = args.trim() === '' ? '' : `\n\nAlso: ${args.trim()}`
+  const extra = args.trim() === '' ? '' : `\n\n<ask>${args.trim()}</ask>`
   return `<reply>\n${reply}\n</reply>\n\nWrite the TL;DR of this reply.${extra}`
 }
 

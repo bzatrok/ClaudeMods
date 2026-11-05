@@ -1,0 +1,117 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Code feed mod — mockup</title>
+<style>
+body{background:#111;color:#ddd;font:14px/1.45 ui-monospace,Menlo,monospace;margin:0;padding:20px}
+h2{font:600 16px system-ui;color:#fff;margin:28px 0 8px}
+p.note{font:13px system-ui;color:#999;max-width:70ch;margin:0 0 12px}
+.term{display:grid;grid-template-columns:1fr 46ch;gap:0;border:1px solid #333;border-radius:6px;overflow:hidden;max-width:1100px}
+.chat{padding:12px 14px;border-right:1px solid #333;min-height:420px}
+.pane{padding:10px 12px;background:#0d0d0d}
+.tab{color:#888;font-size:12px;border-bottom:1px solid #333;padding-bottom:6px;margin-bottom:8px}
+.tab b{color:#ddd}
+.dim{color:#777}.me{color:#8ab4f8}.ok{color:#7ee787}.warn{color:#f2cc60}.cur{color:#fff;background:#243}
+.ev{margin:6px 0}
+.ev .f{color:#ddd}.ev .why{color:#aaa;padding-left:2ch;font-style:italic}
+.diff{margin:4px 0 6px 2ch;border-left:2px solid #333;padding-left:1ch;white-space:pre}
+.add{color:#7ee787}.del{color:#ff7b72}.hunk{color:#79c0ff}
+.live{color:#f2cc60}
+.mob{width:390px;border:1px solid #333;border-radius:28px;padding:16px 12px;background:#0d0d0d;margin:0 0 0 0}
+.mob .hdr{font:600 13px system-ui;color:#fff;display:flex;justify-content:space-between;margin-bottom:10px}
+.mob .hdr span{color:#888;font-weight:400}
+.row{padding:8px 6px;border-bottom:1px solid #222}
+.row .f{color:#ddd}.row .why{color:#999;font:13px system-ui;margin-top:2px}
+.row .meta{color:#666;font-size:12px}
+.chip{display:inline-block;background:#222;color:#aaa;border-radius:10px;padding:0 8px;font:12px system-ui;margin-right:4px}
+.two{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+</style></head><body>
+
+<h2>A — Terminal, fullscreen ≥110 cols: pane docks beside the chat</h2>
+<p class="note">Left is the normal Claude transcript. Right is the mod's pane. Newest at the bottom, the current action highlighted. Each entry = file · what · why. Diffs collapsed by default, the current one open.</p>
+<div class="term">
+ <div class="chat">
+  <div class="me">&gt; the shortlist count is wrong after a refresh</div><br>
+  <div>Looking at how the shortlist is counted and where refresh touches it.</div>
+  <div class="dim">● Read lib/shortlistIds.js</div>
+  <div class="dim">● Read app/api/shortlist/route.js</div><br>
+  <div>The cache key ignores the search id, so a refresh on one search serves another search's count. Fixing the key and the one caller.</div>
+  <div class="dim">● Edit lib/shortlistIds.js</div>
+  <div class="dim">● Edit app/api/shortlist/route.js</div>
+  <div class="warn">● Bash npm test -- shortlist  <span class="dim">running…</span></div>
+  <br><br><br><br>
+  <div class="dim">────────────────────────────────</div>
+  <div class="dim">&gt; █</div>
+ </div>
+ <div class="pane">
+  <div class="tab"><b>changes</b> · this turn · 2 files · +9 −3 &nbsp;&nbsp;<span class="dim">[h]istory [a]ll diffs [q]</span></div>
+
+  <div class="ev"><span class="dim">10:41</span> <span class="dim">read</span> <span class="f">lib/shortlistIds.js</span></div>
+  <div class="ev"><span class="dim">10:41</span> <span class="dim">read</span> <span class="f">app/api/shortlist/route.js</span></div>
+
+  <div class="ev"><span class="dim">10:42</span> <span class="ok">edit</span> <span class="f">lib/shortlistIds.js</span> <span class="dim">+6 −2</span>
+   <div class="why">cache key ignored the search id, so refresh on one search served another's count</div>
+   <div class="dim" style="padding-left:2ch">▸ diff</div>
+  </div>
+
+  <div class="ev"><span class="dim">10:42</span> <span class="ok">edit</span> <span class="f">app/api/shortlist/route.js</span> <span class="dim">+3 −1</span>
+   <div class="why">pass the search id through to the new key</div>
+   <div class="diff"><span class="hunk">@@ -14,4 +14,6 @@</span>
+<span class="del">-  const ids = shortlistIds()</span>
+<span class="add">+  const searchId = params.get('search')</span>
+<span class="add">+  const ids = shortlistIds(searchId)</span>
+   return Response.json({ ids })</div>
+  </div>
+
+  <div class="ev"><span class="dim">10:43</span> <span class="live">▶ bash</span> <span class="f">npm test -- shortlist</span> <span class="live">running</span></div>
+ </div>
+</div>
+
+<h2>B — Terminal under 110 cols, or not fullscreen: pane sits inline above the prompt</h2>
+<p class="note">Same content, fewer rows. The engine fits the frame to the tree, so here the pane would show only the last two or three entries with diffs collapsed. Press <b>a</b> to expand, <b>h</b> for history.</p>
+<div class="term" style="grid-template-columns:1fr;max-width:760px">
+ <div class="chat" style="border:0;min-height:0">
+  <div class="dim">● Edit app/api/shortlist/route.js</div>
+  <div class="warn">● Bash npm test -- shortlist</div>
+  <div class="pane" style="border:1px solid #333;border-radius:4px;margin:10px 0">
+   <div class="ev"><span class="ok">edit</span> <span class="f">lib/shortlistIds.js</span> <span class="dim">+6 −2</span> <span class="why" style="padding:0;display:inline"> — cache key ignored the search id</span></div>
+   <div class="ev"><span class="ok">edit</span> <span class="f">app/api/shortlist/route.js</span> <span class="dim">+3 −1</span> <span class="why" style="padding:0;display:inline"> — pass the search id to the new key</span></div>
+   <div class="ev"><span class="live">▶ bash</span> <span class="f">npm test -- shortlist</span></div>
+  </div>
+  <div class="dim">&gt; █</div>
+ </div>
+</div>
+
+<h2>C — Mobile app: no sidebar, so the pane opens on demand with <code>/changes</code></h2>
+<p class="note">Mobile reports "not fullscreen", so a pane opened unasked would take over the chat. Instead a one-line status under the prompt stays live, and <code>/changes</code> opens the full feed as a takeover you dismiss. Right: the look-back view, grouped by turn.</p>
+<div class="two">
+ <div class="mob">
+  <div class="hdr">changes <span>this turn · 2 files</span></div>
+  <div class="row"><div class="f"><span class="ok">edit</span> lib/shortlistIds.js <span class="meta">+6 −2</span></div>
+   <div class="why">cache key ignored the search id, so refresh on one search served another's count</div>
+   <div class="meta">tap for diff</div></div>
+  <div class="row"><div class="f"><span class="ok">edit</span> app/api/shortlist/route.js <span class="meta">+3 −1</span></div>
+   <div class="why">pass the search id through to the new key</div>
+   <div class="meta">tap for diff</div></div>
+  <div class="row"><div class="f"><span class="live">▶ bash</span> npm test -- shortlist</div><div class="meta">running</div></div>
+  <div style="margin-top:14px;color:#666;font:12px system-ui">status line while closed: <span class="chip">editing route.js · +9 −3 · tests running</span></div>
+ </div>
+
+ <div class="mob">
+  <div class="hdr">history <span>session · 7 files</span></div>
+  <div class="row"><div class="meta">10:42 · "shortlist count wrong after refresh"</div>
+   <div class="f">lib/shortlistIds.js <span class="meta">+6 −2</span></div><div class="why">cache key ignored the search id</div>
+   <div class="f">app/api/shortlist/route.js <span class="meta">+3 −1</span></div><div class="why">pass the search id to the new key</div></div>
+  <div class="row"><div class="meta">10:28 · "add a theme toggle to Nav"</div>
+   <div class="f">components/ThemeToggle.js <span class="meta">new, 31 lines</span></div><div class="why">one toggle component, reads THEME_KEY</div>
+   <div class="f">components/Nav.js <span class="meta">+2 −0</span></div><div class="why">mount the toggle right of the links</div></div>
+  <div class="row"><div class="meta">10:15 · "why is the map slow"</div>
+   <div class="f">components/CarMap.js <span class="meta">+4 −9</span></div><div class="why">markers re-created on every render; memoised by car id</div></div>
+ </div>
+</div>
+
+<h2>What is behind each line</h2>
+<p class="note">
+<b>file · counts</b> come from the Edit/Write tool call and its result, which already carries the unified diff.<br>
+<b>why</b> is the last sentence Claude wrote before the tool call. A one-line system-prompt nudge makes that sentence always present and short.<br>
+<b>history</b> is the same list kept for the session, grouped by the prompt that started the turn.<br>
+<b>reads</b> are shown but dimmed, so you see where it is looking without noise.
+</p>
+</body></html>

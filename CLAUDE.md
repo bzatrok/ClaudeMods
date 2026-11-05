@@ -8,6 +8,8 @@ with a `.claude-plugin/plugin.json` — a new mod folder loads without touching 
 |---|---|
 | `context-bar/` | `/context-bar` shows a stacked context-window bar above the prompt, `/context-bar off` hides it; per session, starts hidden |
 | `handover-report/` | `/handover-report` opens a pane with the state of `.handovers/handover_log.md` |
+| `tldr/` | `/tldr` shows a plain-English summary of the last reply above the prompt |
+| `cockpit/` | situation band above the prompt (gauge, goal/now/done/next/constraints, workers) and auto-compaction with a resume prompt. Read `cockpit/PROJECT_CONTEXT.md` and `.handovers/handover_log.md` before working on it |
 
 ## Commands (per mod folder)
 ```bash

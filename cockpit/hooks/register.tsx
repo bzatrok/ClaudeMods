@@ -15,7 +15,7 @@ const DEFAULT_THRESHOLD = 200_000
 const BOARD_SCRIPT = 'tools/task.py'
 const NUDGE = 'cockpit: the situation block is stale; call cockpit_update.'
 const PROMPT_LINE =
-  'Keep the cockpit current. Call cockpit_update when the goal, the current step, what is done, what comes next, or the constraints change. Set phase_done true when a unit of work closes and the next one has not started. One line per field, no markdown.'
+  'Keep the cockpit current. Call cockpit_update when the goal, the current step, what is done, what comes next, or the constraints change. Set phase_done true when a unit of work closes and the next one has not started. One line per field, no markdown. Never ask the person to run /compact: the cockpit compacts by itself at a phase_done boundary once the context is past the threshold.'
 const FIELD = { type: 'string', maxLength: 120 }
 
 const SHAPE = { shape: 'cockpit-1' } as const

@@ -29,6 +29,9 @@ export type CockpitWorker = {
   since?: string
 }
 
+/** One pre-compaction note, as stored in `$.store` under `cockpit.notes`. */
+export type CockpitNote = { cwd: string; header: string; text: string }
+
 declare module 'claude-code' {
   interface PluginState {
     cockpit: {

@@ -40,5 +40,5 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 | # | Slug | Goal | Status | Branch | Created | Completed |
 |---|------|------|--------|--------|---------|-----------|
 | 001 | [task-board-skill](handover_001_task-board-skill.md) | Shared `task-board` skill; teamwork and source-port call it | ⬜ pending | — (no git under ~/.claude) | 2026-11-05 | — |
-| 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | ⬜ pending | feat/situation-band | 2026-11-05 | — |
+| 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | 🔄 in-progress | feat/situation-band | 2026-11-05 | — |
 | 003 | [auto-compaction](handover_003_auto-compaction.md) | Compact at a task boundary past 200k with note and resume prompt | ⬜ pending | feat/auto-compaction | 2026-11-05 | — |

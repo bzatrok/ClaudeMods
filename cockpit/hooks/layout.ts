@@ -16,7 +16,11 @@ const BAR_CELLS = 10
 const MAX_WORKER_ROWS = 4
 
 /** One drawn row. `gauge` is row 1: the caller adds the collapse button at its right end. */
-export type BandRow = { kind: 'gauge' | 'line' | 'worker'; key: string; text: string }
+/** `label` is the padded heading at the start of `text`, drawn bold by the band. */
+export type BandRow = { kind: 'gauge' | 'line' | 'worker'; key: string; text: string; label?: string }
+
+// the longest heading, 'constraints:': every value starts in the same column
+const LABEL_WIDTH = 12
 
 export function clip(text: string, width: number): string {
   if (width <= 0) return ''
@@ -72,18 +76,16 @@ export function buildRows(i: BandInput): BandRow[] {
   const { block, columns } = i
   const gauge: BandRow = { kind: 'gauge', key: 'gauge', text: gaugeText(i.gauge, i.workers.length, i.now, i.threshold) }
   const hasBlock = block.updatedAt > 0
-  const now: BandRow = {
-    kind: 'line',
-    key: 'now',
-    text: clip(`now   ${hasBlock ? block.now : '(no cockpit_update yet)'}`, columns),
-  }
-  if (i.collapsed || !hasBlock) return [gauge, now]
-
-  const line = (key: keyof CockpitBlock, label: string): BandRow => ({
+  const labelled = (key: string, label: string, value: string): BandRow => ({
     kind: 'line',
     key,
-    text: clip(`${label.padEnd(5)} ${block[key]}`, columns),
+    label: `${label}:`.padEnd(LABEL_WIDTH),
+    text: clip(`${`${label}:`.padEnd(LABEL_WIDTH)} ${value}`, columns),
   })
+  const now = labelled('now', 'now', hasBlock ? block.now : '(no cockpit_update yet)')
+  if (i.collapsed || !hasBlock) return [gauge, now]
+
+  const line = (key: keyof CockpitBlock, label: string): BandRow => labelled(key, label, String(block[key]))
   const shown = i.workers.slice(0, MAX_WORKER_ROWS)
   const workerRows: BandRow[] = shown.map(w => ({
     kind: 'worker',

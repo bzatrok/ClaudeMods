@@ -90,7 +90,7 @@ test('the band shows six rows and the workers, and drops rows to fit maxRows', a
   await complete($)
 
   const full = await $.ui.mount(BAND(12))
-  for (const re of [/ctx 14%/, /goal  +ship the band/, /now +writing tests/, /done +skeleton/, /next +review/, /constraints +no file writes/]) {
+  for (const re of [/ctx 14%/, /ship the band/, /writing tests/, /skeleton/, /review/, /no file writes/]) {
     expect(await full.find({ type: 'Text', text: re })).toBeDefined()
   }
   expect((await full.findAll({ type: 'Text', text: /^worker / })).length).toBe(2)
@@ -121,7 +121,7 @@ test('/cockpit collapses to the gauge and now rows', async ($, on) => {
   await $.command.run({ command: 'cockpit', args: '' } as never)
 
   const ui = await $.ui.mount(BAND(12))
-  expect(await ui.find({ type: 'Text', text: /now +n/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /now: +n$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /goal/ })).toBeUndefined()
   await ui.unmount()
 })
@@ -207,7 +207,7 @@ test('layout: empty block shows the placeholder; board rows parse', () => {
     columns: 80,
     maxRows: 12,
   })
-  expect(rows.map(r => r.text)).toEqual(['ctx 0% ▯▯▯▯▯▯▯▯▯▯ · not compacted yet', 'now   (no cockpit_update yet)'])
+  expect(rows.map(r => r.text)).toEqual(['ctx 0% ▯▯▯▯▯▯▯▯▯▯ · not compacted yet', 'now:         (no cockpit_update yet)'])
   expect(parseBoard(BOARD)[1]?.worker).toEqual({ id: 'T-2', kind: 'board', provider: 'glm', branch: 'feat/b', since: '2026-11-05' })
 })
 
@@ -234,15 +234,15 @@ test('expanding an empty band fills it from the transcript; an update is never o
   await $.command.run({ command: 'cockpit', args: 'on' } as never)
 
   const ui = await $.ui.mount(BAND(12))
-  expect(await ui.find({ type: 'Text', text: /now +grant Key Vault Reader/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /goal +move secrets/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /grant Key Vault Reader/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /move secrets/ })).toBeDefined()
   await ui.unmount()
 
   await $.tool.call({ tool: TOOL, now: 'mine' } as never)
   await $.command.run({ command: 'cockpit', args: 'off' } as never)
   await $.command.run({ command: 'cockpit', args: 'on' } as never)
   const again = await $.ui.mount(BAND(12))
-  expect(await again.find({ type: 'Text', text: /now +mine/ })).toBeDefined()
+  expect(await again.find({ type: 'Text', text: / mine$/ })).toBeDefined()
   await again.unmount()
 })
 

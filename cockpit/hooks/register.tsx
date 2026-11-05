@@ -285,7 +285,17 @@ export const register: Register = (on, options) => {
               </Box>
             ) : (
               <Text key={row.key} wrap="truncate" dimColor={row.kind === 'worker'}>
-                {row.text}
+                {row.label === undefined ? (
+                  row.text
+                ) : (
+                  // a fragment draws as a Box, which a Text refuses: pass the children as a list
+                  [
+                    <Text key="label" bold color="cyan">
+                      {row.label}
+                    </Text>,
+                    row.text.slice(row.label.length),
+                  ]
+                )}
               </Text>
             ),
           )}

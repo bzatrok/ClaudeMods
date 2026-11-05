@@ -30,8 +30,8 @@ test('picks the newest assistant reply that has text', () => {
 })
 
 test('extra ask is appended only when given', () => {
-  expect(buildPrompt('R', '')).not.toContain('Also:')
-  expect(buildPrompt('R', ' one line ')).toContain('Also: one line')
+  expect(buildPrompt('R', '')).not.toContain('<ask>')
+  expect(buildPrompt('R', ' one line ')).toContain('<ask>one line</ask>')
 })
 
 test('blank lines are dropped', () => {

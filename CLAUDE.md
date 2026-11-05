@@ -8,6 +8,7 @@ with a `.claude-plugin/plugin.json` — a new mod folder loads without touching 
 |---|---|
 | `context-bar/` | `/context-bar` shows a stacked context-window bar above the prompt, `/context-bar off` hides it; per session, starts hidden |
 | `handover-report/` | `/handover-report` opens a pane with the state of `.handovers/handover_log.md` |
+| `tldr/` | `/tldr [extra ask]` summarises the last reply with haiku in a bordered box above the prompt (under context-bar, cleared on the next turn); `/tldr auto` does it after every reply (per session, starts off); `/tldr eli5|eli8|eli12|eli15` sets the reading level (persisted, default eli12); `/tldr tune <level> <feedback>` has sonnet rewrite that level's rules into the `/config` field `tldr.<level>`, `/tldr reset <level>` clears it; the model never reads it |
 
 ## Commands (per mod folder)
 ```bash

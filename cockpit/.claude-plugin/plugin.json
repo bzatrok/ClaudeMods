@@ -1,0 +1,6 @@
+{
+  "name": "cockpit",
+  "version": "0.1.0",
+  "description": "Situation band above the prompt: context gauge, goal/now/done/next/constraints written by the model, and the worker roster; /cockpit collapses it",
+  "types": "./types/index.d.ts"
+}

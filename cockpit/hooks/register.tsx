@@ -1,0 +1,199 @@
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
+
+import type { CockpitBlock, CockpitGauge, CockpitWorker } from '../types'
+import { EMPTY_BLOCK, EMPTY_GAUGE, buildRows, mergeWorkers, parseBoard } from './layout'
+
+const COMMAND = 'cockpit'
+const UPDATE_TOOL = 'mcp__cockpit__cockpit_update'
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+const REFRESH_MS = 20_000
+const BOARD_SCRIPT = 'tools/task.py'
+const NUDGE = 'cockpit: the situation block is stale; call cockpit_update.'
+const PROMPT_LINE =
+  'Keep the cockpit current. Call cockpit_update when the goal, the current step, what is done, what comes next, or the constraints change. Set phase_done true when a unit of work closes and the next one has not started. One line per field, no markdown.'
+const FIELD = { type: 'string', maxLength: 120 }
+
+const SHAPE = { shape: 'cockpit-1' } as const
+const block = atom({ plugin: 'cockpit', key: 'block' } as const, EMPTY_BLOCK, SHAPE)
+const gauge = atom({ plugin: 'cockpit', key: 'gauge' } as const, EMPTY_GAUGE, SHAPE)
+const workers = atom({ plugin: 'cockpit', key: 'workers' } as const, [] as CockpitWorker[], SHAPE)
+const collapsed = atom({ plugin: 'cockpit', key: 'collapsed' } as const, false, SHAPE)
+const editsSinceUpdate = atom({ plugin: 'cockpit', key: 'editsSinceUpdate' } as const, 0, SHAPE)
+
+const toggle = ($: EngineInterface) => update($, collapsed, c => !c)
+
+async function refreshGauge($: EngineInterface): Promise<void> {
+  const breakdown = (await $.session.usage({ breakdown: 'summary' })).context.breakdown
+  if (!breakdown) return
+  const used = breakdown.totalTokens
+  const max = breakdown.rawMaxTokens
+  const measuredAt = await $.clock.now()
+  await update($, gauge, g => ({ ...g, used, max, percent: max > 0 ? (used / max) * 100 : 0, measuredAt }))
+}
+
+/** Board rows from `tools/task.py` when the repo has one, then running subagents. A failed read keeps the last roster. */
+async function refreshWorkers($: EngineInterface, cwd: string): Promise<void> {
+  const board: ReturnType<typeof parseBoard> = []
+  try {
+    if (await $.fs.exists(`${cwd}/${BOARD_SCRIPT}`)) {
+      const run = await $.process.run(['python3', '-I', BOARD_SCRIPT, 'list', '--state', 'claimed'], { cwd })
+      if (run.exitCode !== 0) return
+      board.push(...parseBoard(run.stdout))
+    }
+    const subagents = (await $.agent.list())
+      .filter(a => a.status === 'running')
+      .map(a => ({
+        worker: { id: a.description || a.type, kind: 'subagent' as const },
+        names: [a.id, a.teammateId ?? '', a.description],
+      }))
+    await update($, workers, () => mergeWorkers(board, subagents))
+  } catch {
+    // keep the last roster
+  }
+}
+
+async function refresh($: EngineInterface, cwd: string): Promise<void> {
+  await refreshGauge($)
+  await refreshWorkers($, cwd)
+}
+
+export const register: Register = on => {
+  let cwd = ''
+  let isWorking = false
+  let tick: { cancel: () => void } | undefined
+
+  on('session.start', async ($, e, next) => {
+    cwd = e.cwd
+    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band above the prompt' })
+    await $.tool.register({
+      name: 'cockpit_update',
+      description:
+        'Update the situation block shown above the user\'s prompt. Send only the fields that changed; `now` is required.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          goal: FIELD,
+          now: FIELD,
+          done: FIELD,
+          next: FIELD,
+          constraints: FIELD,
+          phase_done: { type: 'boolean' },
+        },
+        required: ['now'],
+      },
+    })
+    tick?.cancel()
+    tick = $.clock.every(REFRESH_MS, () => {
+      if (isWorking) void refresh($, cwd)
+    })
+
+    return next(e)
+  })
+
+  on('command.run', { command: COMMAND }, async $ => {
+    await toggle($)
+    return { text: (await read($, collapsed)) ? 'Cockpit collapsed.' : 'Cockpit expanded.' }
+  })
+
+  on('prompt.compose', async ($, e, next) => {
+    const out = await next(e)
+
+    return { sections: [...out.sections, { id: 'cockpit:update', text: PROMPT_LINE, scope: 'session' as const }] }
+  })
+
+  on('tool.call', { tool: UPDATE_TOOL }, async ($, e) => {
+    const input = e as unknown as Partial<Record<keyof CockpitBlock | 'phase_done', string | boolean>>
+    const text = (k: keyof CockpitBlock, prev: CockpitBlock) => (typeof input[k] === 'string' ? (input[k] as string) : prev[k])
+    const updatedAt = await $.clock.now()
+    await update($, block, prev => ({
+      ...prev,
+      goal: text('goal', prev) as string,
+      now: text('now', prev) as string,
+      done: text('done', prev) as string,
+      next: text('next', prev) as string,
+      constraints: text('constraints', prev) as string,
+      phaseDone: typeof input.phase_done === 'boolean' ? input.phase_done : prev.phaseDone,
+      updatedAt,
+    }))
+    await update($, editsSinceUpdate, () => 0)
+
+    return { result: 'ok' }
+  })
+
+  on('tool.call', async ($, e, next) => {
+    const result = await next(e)
+    if (EDIT_TOOLS.has(e.tool)) await update($, editsSinceUpdate, n => n + 1)
+
+    return result
+  })
+
+  on('turn.start', ($, e, next) => {
+    if (e.agentId === undefined) isWorking = true
+
+    return next(e)
+  })
+
+  on('turn.complete', async ($, e, next) => {
+    const result = await next(e)
+    if (e.agentId !== undefined) return result
+    isWorking = false
+    await refresh($, cwd)
+
+    return (await read($, editsSinceUpdate)) > 0 ? { ...result, text: NUDGE } : result
+  })
+
+  /** Observes only; handover 003 extends this one function. */
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    const lastCompactionAt = await $.clock.now()
+    await update($, gauge, g => ({ ...g, lastCompactionAt }))
+
+    return result
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e)
+
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const isCollapsed = await read($, collapsed)
+    const rows = buildRows({
+      block: await read($, block),
+      gauge: await read($, gauge),
+      workers: await read($, workers),
+      collapsed: isCollapsed,
+      now: await $.clock.now(),
+      columns: e.props.bodyColumns,
+      maxRows: e.props.maxRows,
+    })
+    // other mods (tldr) draw in the same band: stack above them, never replace them
+    const rest = await next(e)
+    const percent = (await read($, gauge)).percent
+    const gaugeColor = percent >= 80 ? 'red' : percent >= 50 ? 'yellow' : 'green'
+
+    return (
+      <Box flexDirection="column">
+        {rows.map(row =>
+          row.kind === 'gauge' ? (
+            <Box key={row.key} justifyContent="space-between">
+              <Text wrap="truncate" color={gaugeColor}>
+                {row.text}
+              </Text>
+              <Button
+                key="collapse"
+                label={isCollapsed ? '[c] expand' : '[c] collapse'}
+                hotkey="c"
+                onPress={() => toggle($)}
+              />
+            </Box>
+          ) : (
+            <Text key={row.key} wrap="truncate" dimColor={row.kind === 'worker'}>
+              {row.text}
+            </Text>
+          ),
+        )}
+        {rest}
+      </Box>
+    )
+  })
+}

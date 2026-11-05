@@ -35,14 +35,14 @@ export function formatAgo(ms: number): string {
   return `${Math.round(s / 3600)}h`
 }
 
-export function gaugeText(gauge: CockpitGauge, workers: number, now: number): string {
+export function gaugeText(gauge: CockpitGauge, workers: number, now: number, threshold: number): string {
   const compacted =
     gauge.lastCompactionAt === undefined
       ? 'not compacted yet'
       : `compacted ${formatAgo(now - gauge.lastCompactionAt)} ago`
   const parts = [`ctx ${Math.round(gauge.percent)}% ${bar(gauge.percent)}`, compacted]
   if (workers > 0) parts.push(`${workers} worker${workers === 1 ? '' : 's'}`)
-  if (gauge.percent >= 20) parts.push('compaction expected at next boundary')
+  if (gauge.used >= threshold) parts.push('compaction expected at next boundary')
 
   return parts.join(' · ')
 }
@@ -58,6 +58,8 @@ export type BandInput = {
   workers: CockpitWorker[]
   collapsed: boolean
   now: number
+  /** tokens past which compaction waits for the next boundary */
+  threshold: number
   columns: number
   maxRows: number
 }
@@ -68,7 +70,7 @@ export type BandInput = {
  */
 export function buildRows(i: BandInput): BandRow[] {
   const { block, columns } = i
-  const gauge: BandRow = { kind: 'gauge', key: 'gauge', text: gaugeText(i.gauge, i.workers.length, i.now) }
+  const gauge: BandRow = { kind: 'gauge', key: 'gauge', text: gaugeText(i.gauge, i.workers.length, i.now, i.threshold) }
   const hasBlock = block.updatedAt > 0
   const now: BandRow = {
     kind: 'line',

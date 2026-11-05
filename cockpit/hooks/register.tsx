@@ -213,6 +213,7 @@ export const register: Register = (on, options) => {
       workers: await read($, workers),
       collapsed: isCollapsed,
       now: await $.clock.now(),
+      threshold,
       columns: e.props.bodyColumns,
       maxRows: e.props.maxRows,
     })

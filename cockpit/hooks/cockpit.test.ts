@@ -197,9 +197,26 @@ test('layout: empty block shows the placeholder; board rows parse', () => {
     workers: [],
     collapsed: false,
     now: 0,
+    threshold: 200_000,
     columns: 80,
     maxRows: 12,
   })
   expect(rows.map(r => r.text)).toEqual(['ctx 0% ▯▯▯▯▯▯▯▯▯▯ · not compacted yet', 'now   (no cockpit_update yet)'])
   expect(parseBoard(BOARD)[1]?.worker).toEqual({ id: 'T-2', kind: 'board', provider: 'glm', branch: 'feat/b', since: '2026-11-05' })
+})
+
+test('layout: the expected row follows the threshold, not a fixed percent', () => {
+  const at = (used: number, threshold: number) =>
+    buildRows({
+      block: { goal: '', now: '', done: '', next: '', constraints: '', updatedAt: 0, phaseDone: false },
+      gauge: { used, max: 1_000_000, percent: used / 10_000, measuredAt: 0 },
+      workers: [],
+      collapsed: false,
+      now: 0,
+      threshold,
+      columns: 120,
+      maxRows: 12,
+    })[0]?.text ?? ''
+  expect(at(50_000, 40_000)).toContain('compaction expected at next boundary')
+  expect(at(250_000, 300_000)).not.toContain('compaction expected')
 })

@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { CockpitBlock, CockpitGauge, CockpitNote, CockpitWorker } from '../types'
 import { buildNote, notesFor, pushNote, resumePrompt, shouldCompact, withPreserve } from './compaction'
 import { FILL_SYSTEM, fillPrompt, parseFill } from './fill'
-import { EMPTY_BLOCK, EMPTY_GAUGE, buildRows, mergeWorkers, parseBoard } from './layout'
+import { EMPTY_BLOCK, EMPTY_GAUGE, buildRows, formatTokens, mergeWorkers, parseBoard } from './layout'
 
 const COMMAND = 'cockpit'
 const UPDATE_TOOL = 'mcp__cockpit__cockpit_update'
@@ -15,7 +15,7 @@ const DEFAULT_THRESHOLD = 200_000
 const BOARD_SCRIPT = 'tools/task.py'
 const NUDGE = 'cockpit: the situation block is stale; call cockpit_update.'
 const PROMPT_LINE =
-  'Keep the cockpit current. Call cockpit_update when the goal, the current step, what is done, what comes next, or the constraints change. Set phase_done true when a unit of work closes and the next one has not started. One line per field, no markdown. Never ask the person to run /compact: the cockpit compacts by itself at a phase_done boundary once the context is past the threshold.'
+  'Keep the cockpit current. Call cockpit_update when the goal, the current step, what is done, what comes next, or the constraints change. Set phase_done true when a unit of work closes and the next one has not started; any update without it clears the mark. One line per field, no markdown. Never ask the person to run /compact: the cockpit compacts by itself at a phase_done boundary once the context is past the threshold.'
 const FIELD = { type: 'string', maxLength: 120 }
 
 const SHAPE = { shape: 'cockpit-1' } as const
@@ -105,11 +105,13 @@ export const register: Register = (on, options) => {
   const threshold = typeof options.thresholdTokens === 'number' ? options.thresholdTokens : DEFAULT_THRESHOLD
   let cwd = ''
   let isWorking = false
+  // a boundary the person marked with /cockpit done: model updates do not clear it, a compaction does
+  let isMarkedByPerson = false
   let tick: { cancel: () => void } | undefined
 
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band (`on`, `off`); expanding fills an empty band from the conversation; `note` prints the latest pre-compaction note, `notes` lists them' })
+    await $.command.register({ name: COMMAND, description: 'Collapse or expand the cockpit band (`on`, `off`); `done` marks a task boundary; expanding fills an empty band from the conversation; `note` prints the latest pre-compaction note, `notes` lists them' })
     await $.tool.register({
       name: 'cockpit_update',
       description:
@@ -146,6 +148,12 @@ export const register: Register = (on, options) => {
 
       return { text: sub === 'note' ? (mine[mine.length - 1] as CockpitNote).text : mine.map(n => n.header).join('\n') }
     }
+    if (sub === 'done') {
+      // the engine refuses a compaction under a command's turn: turn end compacts
+      isMarkedByPerson = true
+      await update($, block, b => ({ ...b, phaseDone: true }))
+      return { text: `Boundary marked. Compacts at the next turn end once the context is past ${formatTokens(threshold)}.` }
+    }
     if (sub === 'on' || sub === 'off') await setCollapsed($, sub === 'off')
     else await toggle($)
     return { text: (await read($, collapsed)) ? 'Cockpit collapsed.' : 'Cockpit expanded.' }
@@ -168,7 +176,8 @@ export const register: Register = (on, options) => {
       done: text('done', prev) as string,
       next: text('next', prev) as string,
       constraints: text('constraints', prev) as string,
-      phaseDone: typeof input.phase_done === 'boolean' ? input.phase_done : prev.phaseDone,
+      // a mark lasts until the next update: work after it is no longer at the boundary
+      phaseDone: input.phase_done === true || isMarkedByPerson,
       updatedAt,
     }))
     await update($, editsSinceUpdate, () => 0)
@@ -209,6 +218,7 @@ export const register: Register = (on, options) => {
         if (!done.skip) {
           const lastCompactionAt = await $.clock.now()
           await update($, gauge, g => ({ ...g, lastCompactionAt }))
+          isMarkedByPerson = false
           await update($, block, b => ({ ...b, phaseDone: false }))
         }
       } catch {

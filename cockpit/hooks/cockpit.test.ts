@@ -251,3 +251,22 @@ test('fill parsing: five lines, none is empty, no now means no fill', () => {
   expect(parseFill('goal: a')).toBeUndefined()
   expect(fillPrompt([{ role: 'assistant', text: '  ', toolUses: [] } as never])).toBeUndefined()
 })
+
+test('/cockpit done marks a boundary that the next turn end compacts at; an update without phase_done clears a mark', async ($, on) => {
+  engine(on, 250_000)
+  const calls = compactEngine(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+
+  await $.tool.call({ tool: TOOL, now: 'n', phase_done: true } as never)
+  await $.tool.call({ tool: TOOL, now: 'started the next task' } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(0)
+
+  const out = (await $.command.run({ command: 'cockpit', args: 'done' } as never)) as { text: string }
+  expect(out.text).toContain('Boundary marked.')
+  expect(calls.instructions.length).toBe(0)
+  // the model's own update in the next turn does not clear the person's mark
+  await $.tool.call({ tool: TOOL, now: 'answering' } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(1)
+})

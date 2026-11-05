@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { buildRows, parseBoard } from './layout'
 import { resumePrompt } from './compaction'
+import { fillPrompt, parseFill } from './fill'
 
 const TOOL = 'mcp__cockpit__cockpit_update'
 const BAND = (maxRows: number) => ({
@@ -54,6 +55,10 @@ function engine(on: On, used = 140_000) {
     value: { exitCode: 0, stdout: BOARD, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
   }))
   on('agent.list', () => ({ value: [] }))
+  on('session.messages', () => ({ value: [{ role: 'user', text: 'port the ACR secrets', toolUses: [] }] as never }))
+  on('model.complete', () => ({
+    value: { isAnswered: true, text: 'goal: move secrets\nnow: grant Key Vault Reader\ndone: none\nnext: test the pipeline\nconstraints: none', usage: {} } as never,
+  }))
   on('tool.call', () => ({ result: {} }))
   on('turn.complete', () => ({ text: 'done' }))
   on('ui.render', () => h('Box', {}) as never)
@@ -91,7 +96,8 @@ test('the band shows six rows and the workers, and drops rows to fit maxRows', a
   expect((await full.findAll({ type: 'Text', text: /^worker / })).length).toBe(2)
   await full.unmount()
 
-  const tight = await $.ui.mount(BAND(3))
+  // 5 rows: the border takes 2, leaving gauge, goal and now
+  const tight = await $.ui.mount(BAND(5))
   expect(await tight.find({ type: 'Text', text: /goal/ })).toBeDefined()
   expect(await tight.find({ type: 'Text', text: /now/ })).toBeDefined()
   expect(await tight.find({ type: 'Text', text: /^(done|next|constraints|worker)/ })).toBeUndefined()
@@ -219,4 +225,29 @@ test('layout: the expected row follows the threshold, not a fixed percent', () =
     })[0]?.text ?? ''
   expect(at(50_000, 40_000)).toContain('compaction expected at next boundary')
   expect(at(250_000, 300_000)).not.toContain('compaction expected')
+})
+
+test('expanding an empty band fills it from the transcript; an update is never overwritten', async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'cockpit', args: 'off' } as never)
+  await $.command.run({ command: 'cockpit', args: 'on' } as never)
+
+  const ui = await $.ui.mount(BAND(12))
+  expect(await ui.find({ type: 'Text', text: /now +grant Key Vault Reader/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /goal +move secrets/ })).toBeDefined()
+  await ui.unmount()
+
+  await $.tool.call({ tool: TOOL, now: 'mine' } as never)
+  await $.command.run({ command: 'cockpit', args: 'off' } as never)
+  await $.command.run({ command: 'cockpit', args: 'on' } as never)
+  const again = await $.ui.mount(BAND(12))
+  expect(await again.find({ type: 'Text', text: /now +mine/ })).toBeDefined()
+  await again.unmount()
+})
+
+test('fill parsing: five lines, none is empty, no now means no fill', () => {
+  expect(parseFill('- goal: a\nnow: b\ndone: none\nnext: c\nconstraints: None.')).toEqual({ goal: 'a', now: 'b', done: '', next: 'c', constraints: '' })
+  expect(parseFill('goal: a')).toBeUndefined()
+  expect(fillPrompt([{ role: 'assistant', text: '  ', toolUses: [] } as never])).toBeUndefined()
 })

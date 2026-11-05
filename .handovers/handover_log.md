@@ -23,6 +23,8 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 <!-- index only: one line per decision, linking the handover that holds the detail -->
 - [task-board-skill](handover_001_task-board-skill.md) — provider recorded as a `provider=<name>` token in Notes, required on claim. Rejected: a new column (breaks the IG2 board header).
 - [task-board-skill](handover_001_task-board-skill.md) — the skill ships `scripts/task.py` copied from IG2 and installs it into a repo as `tools/task.py`. Rejected: calling the script from the skill folder (workers in worktrees need it in the repo, committed).
+- [task-board-skill](handover_001_task-board-skill.md) — a third skill owns the board; teamwork and source-port point at it. Rejected: teamwork owns it (source-port would depend on teamwork), source-port owns it (non-porting repos get no board).
+- [task-board-skill](handover_001_task-board-skill.md) — IG2's live `tools/task.py` is left alone until its next quiet point. Rejected: upgrading IG2 now (mid-port).
 - [situation-band](handover_002_situation-band.md) — one tool `cockpit_update` with five text fields and `phase_done`. Rejected: parsing the model's prose.
 - [situation-band](handover_002_situation-band.md) — nudge from `turn.complete` after a turn that edited files without an update. Rejected: nudge per tool call (noise).
 - [auto-compaction](handover_003_auto-compaction.md) — the note lives in `$.store`, shown by `/cockpit note`; the resume prompt is injected as the first message after compaction by the `session.compact` hook. Rejected: a file in the repo (the ClaudeMods rule: a mod never writes files); appending to `handover_log.md` (index, not store); asking Ben to paste (what we are removing).
@@ -45,6 +47,6 @@ See [PROJECT_CONTEXT.md](../cockpit/PROJECT_CONTEXT.md) and the repo `CLAUDE.md`
 
 | # | Slug | Goal | Status | Branch | Created | Completed |
 |---|------|------|--------|--------|---------|-----------|
-| 001 | [task-board-skill](handover_001_task-board-skill.md) | Shared `task-board` skill; teamwork and source-port call it | ⬜ pending | — (no git under ~/.claude) | 2026-11-05 | — |
+| 001 | [task-board-skill](handover_001_task-board-skill.md) | Shared `task-board` skill; teamwork and source-port call it | ✅ done | — (no git under ~/.claude) | 2026-11-05 | 2026-11-05 |
 | 002 | [situation-band](handover_002_situation-band.md) | Band above the prompt: gauge, five lines, collapse, workers | ✅ done | feat/situation-band | 2026-11-05 | 2026-11-05 |
 | 003 | [auto-compaction](handover_003_auto-compaction.md) | Compact at a task boundary past 200k with note and resume prompt | ✅ done | feat/auto-compaction | 2026-11-05 | 2026-11-05 |

@@ -2,6 +2,7 @@ import type { On } from 'claude-code'
 import { expect, test } from 'claude-code/testing'
 
 import { buildRows, parseBoard } from './layout'
+import { resumePrompt } from './compaction'
 
 const TOOL = 'mcp__cockpit__cockpit_update'
 const BAND = (maxRows: number) => ({
@@ -34,15 +35,20 @@ const usage = {
   },
 } as never
 
+const withUsage = (used: number) => {
+  const u = usage as unknown as { context: { breakdown: object } }
+  return { ...u, context: { ...u.context, breakdown: { ...u.context.breakdown, totalTokens: used } } } as never
+}
+
 const BOARD = 'T-1\tworker-a\tfeat/a\tclaude\t2026-11-05\nT-2\tworker-b\tfeat/b\tglm\t2026-11-05\n'
 
 /** The engine beneath the mod: usage, a repo with a board, no subagents. */
-function engine(on: On) {
+function engine(on: On, used = 140_000) {
   on('clock.now', () => ({ value: Date.now() }))
   on('clock.every', () => ({ value: undefined }))
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('tool.register', () => ({ value: { tool: TOOL } }))
-  on('session.usage', () => ({ value: usage }))
+  on('session.usage', () => ({ value: withUsage(used) }))
   on('fs.exists', () => ({ value: true }))
   on('process.run', () => ({
     value: { exitCode: 0, stdout: BOARD, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -52,6 +58,12 @@ function engine(on: On) {
   on('turn.complete', () => ({ text: 'done' }))
   on('ui.render', () => h('Box', {}) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  const kv = new Map<string, unknown>()
+  on('store.get', (_, e) => ({ value: kv.get(e.key) }))
+  on('store.set', (_, e) => {
+    kv.set(e.key, e.value)
+    return { value: undefined }
+  })
 }
 
 type Turned = { turn: { complete: (input: unknown) => Promise<{ text: string }> } }
@@ -106,6 +118,76 @@ test('/cockpit collapses to the gauge and now rows', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /now +n/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /goal/ })).toBeUndefined()
   await ui.unmount()
+})
+
+type Calls = { instructions: (string | undefined)[]; down: (string | undefined)[] }
+/** Records `$.session.compact` calls reaching the engine; answers with a one-message summary. */
+function compactEngine(on: On): Calls {
+  const calls: Calls = { instructions: [], down: [] }
+  on('session.compact', (_, e) => {
+    calls.instructions.push(e.instructions)
+    return { messages: [{ role: 'assistant', text: 'summary', toolUses: [] }] }
+  })
+
+  return calls
+}
+
+test('turn end compacts at a boundary past the threshold, and only then', async ($, on) => {
+  engine(on, 250_000)
+  const calls = compactEngine(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+
+  await $.tool.call({ tool: TOOL, now: 'n', phase_done: false } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(0)
+
+  await $.tool.call({ tool: TOOL, now: 'n', phase_done: true } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(1)
+  expect(calls.instructions[0]).toContain('Preserve verbatim')
+
+  // a second boundary inside five minutes does not compact again
+  await $.tool.call({ tool: TOOL, now: 'n', phase_done: true } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(1)
+})
+
+test('below the threshold a boundary does not compact', async ($, on) => {
+  engine(on)
+  const calls = compactEngine(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: TOOL, now: 'n', phase_done: true } as never)
+  await complete($)
+  expect(calls.instructions.length).toBe(0)
+})
+
+test('a compaction stores the note and ends with the resume prompt', async ($, on) => {
+  engine(on)
+  compactEngine(on)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: TOOL, goal: 'ship', now: 'testing', next: 'review', constraints: 'no writes' } as never)
+  await complete($)
+
+  const out = await $.session.compact({ trigger: 'plugin', messages: [{ role: 'user', text: 'hi', toolUses: [] }], instructions: 'keep the plan' })
+  const last = out.messages?.[out.messages.length - 1]
+  expect(last?.role).toBe('user')
+  expect(last?.text.startsWith('Resume on /repo')).toBe(true)
+  expect(last?.text).toContain('T-1 · claude')
+  expect(last?.text).toContain('T-2 · glm')
+
+  const note = await $.command.run({ command: 'cockpit', args: 'note' } as never)
+  expect(note.text).toContain('before compaction (1) — trigger plugin')
+  expect(note.text).toContain('goal: ship  now: testing')
+  expect(note.text).toContain('- T-2 · glm · feat/b · since 2026-11-05')
+  expect((await $.command.run({ command: 'cockpit', args: 'notes' } as never)).text).toContain('before compaction (1)')
+})
+
+test('resume prompt without any update still names cwd, command and workers', () => {
+  const empty = { goal: '', now: '', done: '', next: '', constraints: '', updatedAt: 0, phaseDone: false }
+  const text = resumePrompt('/r', empty, [{ id: 'w1', kind: 'board', provider: 'glm' }])
+  expect(text).toContain('Resume on /r. Run /cockpit note')
+  expect(text).toContain('w1 · glm')
+  expect(text).not.toContain('Goal:')
 })
 
 test('layout: empty block shows the placeholder; board rows parse', () => {
